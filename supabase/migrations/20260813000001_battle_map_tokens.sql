@@ -88,6 +88,7 @@ create index if not exists battle_map_annotations_map_idx on battle_map_annotati
 alter table battle_map_annotations enable row level security;
 create policy "battle_map_annotations_select" on battle_map_annotations for select using (true);
 create policy "battle_map_annotations_insert" on battle_map_annotations for insert with check ((select auth.role()) = 'service_role');
+create policy "battle_map_annotations_update" on battle_map_annotations for update using ((select auth.role()) = 'service_role');
 create policy "battle_map_annotations_delete" on battle_map_annotations for delete using ((select auth.role()) = 'service_role');
 
 -- ============================================================
@@ -109,6 +110,7 @@ create index if not exists battle_token_library_campaign_idx on battle_token_lib
 alter table battle_token_library enable row level security;
 create policy "battle_token_library_select" on battle_token_library for select using (true);
 create policy "battle_token_library_insert" on battle_token_library for insert with check ((select auth.role()) = 'service_role');
+create policy "battle_token_library_update" on battle_token_library for update using ((select auth.role()) = 'service_role');
 create policy "battle_token_library_delete" on battle_token_library for delete using ((select auth.role()) = 'service_role');
 
 -- ============================================================
