@@ -148,6 +148,36 @@ export class UpdateMapAccessRequest extends RequestBase {
   ) { super() }
 }
 
+export class StoreBattleMapRequest extends RequestBase {
+  constructor(
+    public readonly campaignId: string,
+    public readonly name: string,
+    public readonly type: MapType,
+    public readonly storagePath: string,
+    public readonly imageUrl: string,
+  ) { super() }
+}
+
+export class LoadBattleMapsRequest extends RequestBase {
+  constructor(public readonly campaignId: string) { super() }
+}
+
+export class RemoveBattleMapRequest extends RequestBase {
+  constructor(
+    public readonly mapId: string,
+    public readonly storagePath: string,
+  ) { super() }
+}
+
+export class UpdateBattleMapAccessRequest extends RequestBase {
+  constructor(
+    public readonly campaignId: string,
+    public readonly battleMapAccessGranted: boolean,
+    public readonly sharedBattleMapIds: string[],
+    public readonly battleMapViewport: MapViewport | null,
+  ) { super() }
+}
+
 export class StoreQuestRequest extends RequestBase {
   constructor(
     public readonly campaignId: string,

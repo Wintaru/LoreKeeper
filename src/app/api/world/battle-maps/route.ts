@@ -1,0 +1,74 @@
+import { NextResponse } from 'next/server'
+import { createContainer } from '@/container/DependencyContainer'
+import { createServiceClient } from '@/lib/supabase/server'
+import { GetBattleMapsRequest, AddBattleMapRequest } from '@/managers/world/WorldRequests'
+import type { GetBattleMapsResponse, BattleMapResponse } from '@/managers/world/WorldResponses'
+import type { MapType, MapViewport } from '@/types'
+
+const MAP_TYPES: MapType[] = ['town', 'city', 'world', 'dungeon']
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const campaignId = searchParams.get('campaignId')
+  if (!campaignId) return NextResponse.json({ error: 'campaignId is required' }, { status: 400 })
+
+  const db = createServiceClient()
+  const { data: campaign } = await db
+    .from('campaigns')
+    .select('battle_map_access_granted, shared_battle_map_ids, battle_map_viewport')
+    .eq('id', campaignId)
+    .single()
+
+  const { worldManager } = createContainer()
+  const result = (await worldManager.query(new GetBattleMapsRequest(campaignId))) as GetBattleMapsResponse
+
+  return NextResponse.json({
+    maps: result.maps,
+    battleMapAccessGranted: (campaign?.battle_map_access_granted as boolean) ?? false,
+    sharedBattleMapIds: (campaign?.shared_battle_map_ids as string[]) ?? [],
+    battleMapViewport: (campaign?.battle_map_viewport as MapViewport | null) ?? null,
+  })
+}
+
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const file = formData.get('file')
+  const campaignId = formData.get('campaignId')
+  const name = formData.get('name')
+  const type = formData.get('type')
+
+  if (
+    !(file instanceof File) ||
+    typeof campaignId !== 'string' ||
+    typeof name !== 'string' ||
+    typeof type !== 'string' ||
+    !MAP_TYPES.includes(type as MapType)
+  ) {
+    return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
+  }
+
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const storagePath = `${campaignId}/${crypto.randomUUID()}.${ext}`
+
+  const db = createServiceClient()
+  const { error: uploadError } = await db.storage
+    .from('battle-maps')
+    .upload(storagePath, file, { contentType: file.type, upsert: false })
+
+  if (uploadError) {
+    return NextResponse.json({ error: uploadError.message }, { status: 500 })
+  }
+
+  const { data: { publicUrl } } = db.storage.from('battle-maps').getPublicUrl(storagePath)
+
+  const { worldManager } = createContainer()
+  const result = (await worldManager.execute(
+    new AddBattleMapRequest(campaignId, name, type as MapType, storagePath, publicUrl)
+  )) as BattleMapResponse
+
+  if (!result.success || !result.map) {
+    return NextResponse.json({ error: result.errorMessage }, { status: 400 })
+  }
+
+  return NextResponse.json({ map: result.map }, { status: 201 })
+}

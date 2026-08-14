@@ -58,6 +58,9 @@ function rowToCharacter(row: Record<string, unknown>): Character {
     customCurrency: (row.custom_currency as Character['customCurrency']) ?? [],
     pushSubscription: (row.push_subscription as Character['pushSubscription']) ?? null,
     isActive: row.is_active as boolean,
+    tokenImageUrl: (row.token_image_url as string) ?? null,
+    tokenStoragePath: (row.token_storage_path as string) ?? null,
+    tokenColor: (row.token_color as string) ?? '#b45309',
     createdAt: new Date(row.created_at as string),
   }
 }

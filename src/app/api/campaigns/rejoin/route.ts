@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const db = createServiceClient()
   const { data, error } = await db
     .from('campaigns')
-    .select('id, code, gold, silver, copper, custom_currency, shared_items, map_access_granted, shared_map_ids, map_viewport, created_at, last_active_at, expires_at, dm_pin_hash')
+    .select('id, code, gold, silver, copper, custom_currency, shared_items, map_access_granted, shared_map_ids, map_viewport, battle_map_access_granted, shared_battle_map_ids, battle_map_viewport, created_at, last_active_at, expires_at, dm_pin_hash')
     .eq('code', body.campaignCode.toUpperCase())
     .single()
 
@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     mapAccessGranted: (data.map_access_granted as boolean) ?? false,
     sharedMapIds: (data.shared_map_ids as string[]) ?? [],
     mapViewport: (data.map_viewport as MapViewport | null) ?? null,
+    battleMapAccessGranted: (data.battle_map_access_granted as boolean) ?? false,
+    sharedBattleMapIds: (data.shared_battle_map_ids as string[]) ?? [],
+    battleMapViewport: (data.battle_map_viewport as MapViewport | null) ?? null,
     createdAt: new Date(data.created_at as string),
     lastActiveAt: new Date(data.last_active_at as string),
     expiresAt: new Date(data.expires_at as string),

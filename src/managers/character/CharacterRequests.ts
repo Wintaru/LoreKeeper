@@ -56,6 +56,15 @@ export class UpdateCharacterStatsRequest extends RequestBase {
   ) { super() }
 }
 
+export class UpdateCharacterTokenRequest extends RequestBase {
+  constructor(
+    public readonly characterId: string,
+    public readonly tokenImageUrl: string | null,
+    public readonly tokenStoragePath: string | null,
+    public readonly tokenColor: string,
+  ) { super() }
+}
+
 export class UpdateCharacterCurrencyRequest extends RequestBase {
   constructor(
     public readonly characterId: string,

@@ -69,6 +69,9 @@ export interface Campaign {
   mapAccessGranted: boolean
   sharedMapIds: string[]
   mapViewport: MapViewport | null
+  battleMapAccessGranted: boolean
+  sharedBattleMapIds: string[]
+  battleMapViewport: MapViewport | null
   createdAt: Date
   lastActiveAt: Date
   expiresAt: Date
@@ -77,6 +80,16 @@ export interface Campaign {
 export type MapType = 'town' | 'city' | 'world' | 'dungeon'
 
 export interface CampaignMap {
+  id: string
+  campaignId: string
+  name: string
+  type: MapType
+  storagePath: string
+  imageUrl: string
+  createdAt: Date
+}
+
+export interface BattleMap {
   id: string
   campaignId: string
   name: string
@@ -198,6 +211,9 @@ export interface Character {
   customCurrency: CustomCurrencyEntry[]
   pushSubscription: PushSubscriptionJSON | null
   isActive: boolean
+  tokenImageUrl: string | null
+  tokenStoragePath: string | null
+  tokenColor: string
   createdAt: Date
 }
 
@@ -300,5 +316,100 @@ export interface Quest {
   isOptional: boolean
   isPublic: boolean
   status: QuestStatus
+  createdAt: Date
+}
+
+// ── Battle Map: tokens, fog of war, scale, annotations ─────────────────────────
+
+export type TokenKind = 'player' | 'npc'
+
+export interface StatusEffect {
+  name: string
+  rollType: string
+  modifier: number
+  mode: 'bonus' | 'penalty' | 'advantage' | 'disadvantage'
+}
+
+export interface BattleToken {
+  id: string
+  campaignId: string
+  battleMapId: string
+  kind: TokenKind
+  characterId: string | null
+  name: string
+  baseName: string
+  libraryKey: string | null
+  imageUrl: string | null
+  storagePath: string | null
+  color: string
+  x: number
+  y: number
+  size: number
+  visibleToPlayers: boolean
+  showRange: boolean
+  statusEffects: StatusEffect[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface FogStroke {
+  id: string
+  tool: 'paint' | 'erase'
+  points: { x: number; y: number }[]
+  radius: number
+}
+
+export interface BattleMapFog {
+  battleMapId: string
+  strokes: FogStroke[]
+  updatedAt: Date
+}
+
+export interface BattleMapScale {
+  battleMapId: string
+  feetPerUnit: number
+  updatedAt: Date
+}
+
+export type AnnotationKind = 'pencil' | 'text' | 'aoe'
+export type AoEShape = 'cone' | 'circle' | 'square' | 'line'
+
+export interface PencilAnnotationData {
+  points: { x: number; y: number }[]
+  color: string
+}
+
+export interface TextAnnotationData {
+  x: number
+  y: number
+  text: string
+  color: string
+}
+
+export interface AoEAnnotationData {
+  shape: AoEShape
+  originX: number
+  originY: number
+  targetX: number
+  targetY: number
+  color: string
+}
+
+export interface BattleMapAnnotation {
+  id: string
+  battleMapId: string
+  kind: AnnotationKind
+  data: PencilAnnotationData | TextAnnotationData | AoEAnnotationData
+  createdAt: Date
+}
+
+export interface BattleTokenLibraryEntry {
+  id: string
+  campaignId: string
+  name: string
+  baseName: string
+  imageUrl: string
+  storagePath: string
+  color: string
   createdAt: Date
 }

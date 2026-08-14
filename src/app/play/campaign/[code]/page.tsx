@@ -3,10 +3,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, CustomCurrencyEntry, FateEvent, FateEventType, Whisper, CampaignMap, MapViewport, InitiativeRequest, Quest } from '@/types'
+import type { Character, CustomCurrencyEntry, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest } from '@/types'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { LevelUpModal } from '@/components/LevelUpModal'
+import { PlayerBattleMapView } from '@/components/battlemap/PlayerBattleMapView'
+import { TokenAppearancePicker } from '@/components/battlemap/TokenAppearancePicker'
 
 const XP_THRESHOLDS = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000]
 function xpForNextLevel(level: number) { return level >= 20 ? null : XP_THRESHOLDS[level] }
@@ -84,13 +86,18 @@ export default function PlayerCampaignPage() {
   const [initiativeSubmitting, setInitiativeSubmitting] = useState(false)
   const [levelUpModal, setLevelUpModal] = useState<{ level: number; prevLevel: number } | null>(null)
   const prevLevelRef = useRef<number | null>(null)
-  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'spells' | 'rulebook' | 'quests'>('character')
+  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests'>('character')
   const [quests, setQuests] = useState<Quest[]>([])
   const [mapAccessGranted, setMapAccessGranted] = useState(false)
   const [sharedMapIds, setSharedMapIds] = useState<string[]>([])
   const [mapViewport, setMapViewport] = useState<MapViewport | null>(null)
   const [campaignMaps, setCampaignMaps] = useState<CampaignMap[]>([])
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null)
+  const [battleMapAccessGranted, setBattleMapAccessGranted] = useState(false)
+  const [sharedBattleMapIds, setSharedBattleMapIds] = useState<string[]>([])
+  const [battleMapViewport, setBattleMapViewport] = useState<MapViewport | null>(null)
+  const [campaignBattleMaps, setCampaignBattleMaps] = useState<BattleMap[]>([])
+  const [selectedBattleMapId, setSelectedBattleMapId] = useState<string | null>(null)
 
   const loadCharacter = useCallback(async (cid: string) => {
     const characterId = sessionStorage.getItem(`character_${code.toUpperCase()}`)
@@ -128,6 +135,17 @@ export default function PlayerCampaignPage() {
     }
   }, [])
 
+  const loadBattleMapAccess = useCallback(async (cid: string) => {
+    const res = await fetch(`/api/world/battle-maps?campaignId=${cid}`)
+    const data: unknown = await res.json()
+    if (isBattleMapsResponse(data)) {
+      setBattleMapAccessGranted(data.battleMapAccessGranted)
+      setSharedBattleMapIds(data.sharedBattleMapIds)
+      setBattleMapViewport(data.battleMapViewport)
+      setCampaignBattleMaps(data.maps)
+    }
+  }, [])
+
   const fetchInitiativeRequest = useCallback(async (cid: string) => {
     const res = await fetch(`/api/initiative/request?campaignId=${cid}`)
     const data: unknown = await res.json()
@@ -147,11 +165,11 @@ export default function PlayerCampaignPage() {
       if (!data) { setLoading(false); return }
       const cid = data.id as string
       setCampaignId(cid)
-      await Promise.all([loadCharacter(cid), loadMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid)])
+      await Promise.all([loadCharacter(cid), loadMapAccess(cid), loadBattleMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid)])
       setLoading(false)
     }
     void init()
-  }, [code, loadCharacter, loadMapAccess, fetchInitiativeRequest, fetchQuests])
+  }, [code, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchInitiativeRequest, fetchQuests])
 
   // Load fate log and whispers once character is known
   useEffect(() => {
@@ -215,6 +233,14 @@ export default function PlayerCampaignPage() {
           if (!granted) setPlayerTab('character')
           // Re-fetch full maps list in case new maps were uploaded since page load
           void loadMapAccess(campaignId)
+
+          const battleGranted = row.battle_map_access_granted as boolean
+          setBattleMapAccessGranted(battleGranted)
+          setSharedBattleMapIds((row.shared_battle_map_ids as string[]) ?? [])
+          setBattleMapViewport((row.battle_map_viewport as MapViewport | null) ?? null)
+          if (!battleGranted) setPlayerTab('character')
+          // Re-fetch full battle maps list in case new maps were uploaded since page load
+          void loadBattleMapAccess(campaignId)
         })
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'initiative_requests', filter: `campaign_id=eq.${campaignId}` },
@@ -254,7 +280,7 @@ export default function PlayerCampaignPage() {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       if (whisperToastTimerRef.current) clearTimeout(whisperToastTimerRef.current)
     }
-  }, [character?.id, campaignId, loadFateLog, loadCharacter, loadMapAccess, fetchQuests])
+  }, [character?.id, campaignId, loadFateLog, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchQuests])
 
   // Register service worker and subscribe to push.
   // Always run on character load so this browser's subscription is synced to the DB —
@@ -291,7 +317,7 @@ export default function PlayerCampaignPage() {
   const hpColor = hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
 
   return (
-    <main className={`bg-stone-950 text-stone-100 flex flex-col ${playerTab === 'map' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
+    <main className={`bg-stone-950 text-stone-100 flex flex-col ${playerTab === 'map' || playerTab === 'battleMap' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       {fateToast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm border-2 rounded-2xl px-5 py-4 shadow-2xl animate-in slide-in-from-top-4 fade-in duration-300 ${EVENT_TOAST[fateToast].classes}`}>
           <p className="text-xs uppercase tracking-[0.2em] opacity-60 mb-1">The fates have spoken</p>
@@ -428,6 +454,12 @@ export default function PlayerCampaignPage() {
                 className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'map' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
               >Map</button>
             )}
+            {battleMapAccessGranted && (
+              <button
+                onClick={() => setPlayerTab('battleMap')}
+                className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'battleMap' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
+              >Battle Map</button>
+            )}
             <button
               onClick={() => setPlayerTab('spells')}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'spells' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
@@ -455,6 +487,18 @@ export default function PlayerCampaignPage() {
             mapViewport={mapViewport}
             selectedMapId={selectedMapId}
             onSelectMap={setSelectedMapId}
+          />
+        </div>
+      )}
+
+      {playerTab === 'battleMap' && battleMapAccessGranted && (
+        <div className="flex-1 overflow-hidden">
+          <PlayerBattleMapTab
+            maps={campaignBattleMaps}
+            sharedMapIds={sharedBattleMapIds}
+            mapViewport={battleMapViewport}
+            selectedMapId={selectedBattleMapId}
+            onSelectMap={setSelectedBattleMapId}
           />
         </div>
       )}
@@ -498,6 +542,11 @@ export default function PlayerCampaignPage() {
             ● Fate notifications active
           </div>
         )}
+
+        <TokenAppearancePicker
+          character={character}
+          onUpdated={patch => setCharacter(prev => prev ? { ...prev, tokenImageUrl: patch.tokenImageUrl, tokenColor: patch.tokenColor } : prev)}
+        />
 
         <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
           <div className="flex items-end justify-between">
@@ -995,6 +1044,10 @@ function isMapsResponse(v: unknown): v is { maps: CampaignMap[]; mapAccessGrante
   return typeof v === 'object' && v !== null && 'maps' in v && Array.isArray((v as Record<string, unknown>).maps)
 }
 
+function isBattleMapsResponse(v: unknown): v is { maps: BattleMap[]; battleMapAccessGranted: boolean; sharedBattleMapIds: string[]; battleMapViewport: MapViewport | null } {
+  return typeof v === 'object' && v !== null && 'maps' in v && Array.isArray((v as Record<string, unknown>).maps)
+}
+
 function isInitiativeRequestResponse(v: unknown): v is { request: InitiativeRequest | null } {
   return typeof v === 'object' && v !== null && 'request' in v
 }
@@ -1166,6 +1219,66 @@ function PlayerMapTab({
   )
 }
 
+// ── Player Battle Map Tab ──────────────────────────────────────────────────────
+
+function PlayerBattleMapTab({
+  maps,
+  sharedMapIds,
+  mapViewport,
+  selectedMapId,
+  onSelectMap,
+}: {
+  maps: BattleMap[]
+  sharedMapIds: string[]
+  mapViewport: MapViewport | null
+  selectedMapId: string | null
+  onSelectMap: (id: string) => void
+}) {
+  const sharedMaps = maps.filter(m => sharedMapIds.includes(m.id))
+
+  const activeId = selectedMapId && sharedMapIds.includes(selectedMapId)
+    ? selectedMapId
+    : sharedMaps[0]?.id ?? null
+
+  const activeMap = sharedMaps.find(m => m.id === activeId) ?? null
+
+  if (sharedMaps.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] text-stone-500 text-sm">
+        No battle maps shared yet.
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Map selector (only show if more than 1 shared map) */}
+      {sharedMaps.length > 1 && (
+        <div className="flex gap-2 px-4 py-2 border-b border-stone-800 overflow-x-auto">
+          {sharedMaps.map(m => (
+            <button
+              key={m.id}
+              onClick={() => onSelectMap(m.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-colors ${
+                m.id === activeId
+                  ? 'bg-amber-900/60 border-amber-700 text-amber-300'
+                  : 'border-stone-700 text-stone-500 hover:text-stone-300'
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Map viewer */}
+      <div className="flex-1 overflow-hidden">
+        {activeMap && <PlayerBattleMapView battleMap={activeMap} />}
+      </div>
+    </div>
+  )
+}
+
 function MapViewer({ map, viewport }: { map: CampaignMap; viewport: MapViewport | null }) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
@@ -1317,6 +1430,9 @@ function rowToCharacter(row: Record<string, unknown>): Character {
     customCurrency: (row.custom_currency as CustomCurrencyEntry[]) ?? [],
     pushSubscription: (row.push_subscription as Character['pushSubscription']) ?? null,
     isActive: row.is_active as boolean,
+    tokenImageUrl: (row.token_image_url as string) ?? null,
+    tokenStoragePath: (row.token_storage_path as string) ?? null,
+    tokenColor: (row.token_color as string) ?? '#b45309',
     createdAt: new Date(row.created_at as string),
   }
 }

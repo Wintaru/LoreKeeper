@@ -1,5 +1,5 @@
 import { ResponseBase } from '@/common/ResponseBase'
-import type { Npc, Location, SessionNote, InventoryItem, CustomTable, CustomCurrencyEntry, CampaignMap, Quest } from '@/types'
+import type { Npc, Location, SessionNote, InventoryItem, CustomTable, CustomCurrencyEntry, CampaignMap, BattleMap, Quest } from '@/types'
 
 export class NpcResponse extends ResponseBase {
   readonly correlationId: string
@@ -187,6 +187,36 @@ export class GetMapsResponse extends ResponseBase {
   readonly maps: CampaignMap[]
 
   constructor(correlationId: string, maps: CampaignMap[], errorMessage?: string) {
+    super()
+    this.correlationId = correlationId
+    this.maps = maps
+    this.success = errorMessage === undefined
+    this.errorMessage = errorMessage ?? null
+  }
+}
+
+export class BattleMapResponse extends ResponseBase {
+  readonly correlationId: string
+  readonly success: boolean
+  readonly errorMessage: string | null
+  readonly map: BattleMap | null
+
+  constructor(correlationId: string, map: BattleMap | null, errorMessage?: string) {
+    super()
+    this.correlationId = correlationId
+    this.map = map
+    this.success = map !== null
+    this.errorMessage = errorMessage ?? null
+  }
+}
+
+export class GetBattleMapsResponse extends ResponseBase {
+  readonly correlationId: string
+  readonly success: boolean
+  readonly errorMessage: string | null
+  readonly maps: BattleMap[]
+
+  constructor(correlationId: string, maps: BattleMap[], errorMessage?: string) {
     super()
     this.correlationId = correlationId
     this.maps = maps

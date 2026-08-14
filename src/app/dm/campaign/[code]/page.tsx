@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, MapViewport, MapType, InitiativeRequest, Quest, QuestStatus } from '@/types'
+import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, BattleMap, MapViewport, MapType, InitiativeRequest, Quest } from '@/types'
 import { EncounterEngine } from '@/engines/encounter/EncounterEngine'
 import { EvaluateEncounterRequest } from '@/engines/encounter/EncounterEngineRequests'
 import { EvaluateEncounterResponse } from '@/engines/encounter/EncounterEngineResponses'
@@ -11,8 +11,9 @@ import { HandlerResolverBuilder } from '@/common/resolver/HandlerResolverBuilder
 import { EvaluateEncounterHandler } from '@/engines/encounter/handlers/EvaluateEncounterHandler'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
+import { BattleMapEditor } from '@/components/battlemap/BattleMapEditor'
 
-type Tab = 'roster' | 'combat' | 'fate' | 'world' | 'encounter' | 'maps' | 'spells' | 'rulebook'
+type Tab = 'roster' | 'combat' | 'fate' | 'world' | 'encounter' | 'maps' | 'battleMaps' | 'spells' | 'rulebook'
 type WorldTab = 'npcs' | 'locations' | 'inventory' | 'log' | 'tables' | 'quests'
 
 // D&D 5e XP thresholds — index = level - 1
@@ -136,8 +137,8 @@ export default function DmControlPanel() {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      const tabs: Tab[] = ['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'spells', 'rulebook']
-      if (e.key >= '1' && e.key <= '8') {
+      const tabs: Tab[] = ['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'battleMaps', 'spells', 'rulebook']
+      if (e.key >= '1' && e.key <= '9') {
         setTab(tabs[parseInt(e.key, 10) - 1])
       } else if (e.key === 'd' || e.key === 'D') {
         setShowDice(v => !v)
@@ -159,7 +160,7 @@ export default function DmControlPanel() {
     )
   }
 
-  const TAB_LABELS: Record<Tab, string> = { roster: 'Roster', combat: 'Combat', fate: 'Fate Engine', world: 'World', encounter: 'Encounter', maps: 'Maps', spells: 'Spells', rulebook: 'Rulebook' }
+  const TAB_LABELS: Record<Tab, string> = { roster: 'Roster', combat: 'Combat', fate: 'Fate Engine', world: 'World', encounter: 'Encounter', maps: 'Maps', battleMaps: 'Battle Maps', spells: 'Spells', rulebook: 'Rulebook' }
 
   return (
     <main className="min-h-screen bg-stone-950 text-stone-100">
@@ -188,7 +189,7 @@ export default function DmControlPanel() {
       </div>
 
       <div className="border-b border-stone-800 flex overflow-x-auto">
-        {(['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'spells', 'rulebook'] as Tab[]).map(t => (
+        {(['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'battleMaps', 'spells', 'rulebook'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -240,6 +241,9 @@ export default function DmControlPanel() {
         {tab === 'maps' && campaignId && (
           <MapsTab campaignId={campaignId} />
         )}
+        {tab === 'battleMaps' && campaignId && (
+          <BattleMapsTab campaignId={campaignId} characters={characters} />
+        )}
         {tab === 'spells' && <SpellsTab />}
         {tab === 'rulebook' && <RulebookTab />}
       </div>
@@ -253,7 +257,7 @@ export default function DmControlPanel() {
             </div>
             <div className="space-y-1.5">
               <p className="text-xs text-stone-500 uppercase tracking-wider mb-2">Tabs</p>
-              {(['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'spells', 'rulebook'] as Tab[]).map((t, i) => (
+              {(['roster', 'combat', 'fate', 'world', 'encounter', 'maps', 'battleMaps', 'spells', 'rulebook'] as Tab[]).map((t, i) => (
                 <div key={t} className="flex items-center text-sm">
                   <kbd className="bg-stone-800 border border-stone-700 text-stone-300 px-2 py-0.5 rounded text-xs font-mono w-6 text-center shrink-0">{i + 1}</kbd>
                   <span className="text-stone-400 ml-3">{TAB_LABELS[t]}</span>
@@ -2992,7 +2996,7 @@ function MonsterGroupForm({
           {/* Ability scores */}
           <div>
             <p className="text-xs text-stone-500 mb-1.5">Ability Scores</p>
-            <div className="grid grid-cols-6 gap-1.5 text-center">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
               {ABILITY_KEYS.map(key => (
                 <div key={key}>
                   <p className="text-xs text-stone-500 uppercase mb-1">{key}</p>
@@ -3245,9 +3249,7 @@ function isInventoryResponse(v: unknown): v is { gold: number; silver?: number; 
 function isQuestsResponse(v: unknown): v is { quests: Quest[] } {
   return typeof v === 'object' && v !== null && 'quests' in v && Array.isArray((v as Record<string, unknown>).quests)
 }
-function isQuestResponse(v: unknown): v is { quest: Quest } {
-  return typeof v === 'object' && v !== null && 'quest' in v && (v as Record<string, unknown>).quest !== null
-}
+
 function isRosterResponse(v: unknown): v is { characters: Character[] } {
   return typeof v === 'object' && v !== null && 'characters' in v && Array.isArray((v as Record<string, unknown>).characters)
 }
@@ -3273,6 +3275,10 @@ function isInitiativeRequestApiResponse(v: unknown): v is { request: InitiativeR
   return typeof v === 'object' && v !== null && 'request' in v && (v as Record<string, unknown>).request !== null
 }
 function isMapsResponse(v: unknown): v is { maps: CampaignMap[]; mapAccessGranted: boolean; sharedMapIds: string[]; mapViewport: MapViewport | null } {
+  return typeof v === 'object' && v !== null && 'maps' in v && Array.isArray((v as Record<string, unknown>).maps)
+}
+
+function isBattleMapsResponse(v: unknown): v is { maps: BattleMap[]; battleMapAccessGranted: boolean; sharedBattleMapIds: string[]; battleMapViewport: MapViewport | null } {
   return typeof v === 'object' && v !== null && 'maps' in v && Array.isArray((v as Record<string, unknown>).maps)
 }
 
@@ -3514,6 +3520,250 @@ function MapsTab({ campaignId }: { campaignId: string }) {
   )
 }
 
+function BattleMapsTab({ campaignId, characters }: { campaignId: string; characters: Character[] }) {
+  const [maps, setMaps] = useState<BattleMap[]>([])
+  const [mapAccessGranted, setMapAccessGranted] = useState(false)
+  const [sharedMapIds, setSharedMapIds] = useState<string[]>([])
+  const [mapViewport, setMapViewport] = useState<MapViewport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [uploadName, setUploadName] = useState('')
+  const [uploadType, setUploadType] = useState<MapType>('dungeon')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [viewportTarget, setViewportTarget] = useState<BattleMap | null>(null)
+  const [editingMap, setEditingMap] = useState<BattleMap | null>(null)
+
+  const loadMaps = useCallback(async () => {
+    const res = await fetch(`/api/world/battle-maps?campaignId=${campaignId}`)
+    const data: unknown = await res.json()
+    if (isBattleMapsResponse(data)) {
+      setMaps(data.maps)
+      setMapAccessGranted(data.battleMapAccessGranted)
+      setSharedMapIds(data.sharedBattleMapIds)
+      setMapViewport(data.battleMapViewport)
+    }
+    setLoading(false)
+  }, [campaignId])
+
+  useEffect(() => { void loadMaps() }, [loadMaps])
+
+  async function handleUpload() {
+    if (!uploadFile || !uploadName.trim()) return
+    setUploading(true)
+    const fd = new FormData()
+    fd.append('file', uploadFile)
+    fd.append('campaignId', campaignId)
+    fd.append('name', uploadName.trim())
+    fd.append('type', uploadType)
+    await fetch('/api/world/battle-maps', { method: 'POST', body: fd })
+    setUploadFile(null); setUploadName(''); setUploading(false)
+    void loadMaps()
+  }
+
+  async function handleDelete(map: BattleMap) {
+    await fetch(`/api/world/battle-maps/${map.id}?storagePath=${encodeURIComponent(map.storagePath)}`, { method: 'DELETE' })
+    const newShared = sharedMapIds.filter(id => id !== map.id)
+    const newViewport = mapViewport?.mapId === map.id ? null : mapViewport
+    await saveAccess(mapAccessGranted, newShared, newViewport)
+    void loadMaps()
+  }
+
+  async function toggleShare(mapId: string) {
+    const newShared = sharedMapIds.includes(mapId)
+      ? sharedMapIds.filter(id => id !== mapId)
+      : [...sharedMapIds, mapId]
+    await saveAccess(mapAccessGranted, newShared, mapViewport)
+    setSharedMapIds(newShared)
+  }
+
+  async function toggleAccess() {
+    const next = !mapAccessGranted
+    await saveAccess(next, sharedMapIds, mapViewport)
+    setMapAccessGranted(next)
+  }
+
+  async function saveAccess(granted: boolean, shared: string[], viewport: MapViewport | null) {
+    await fetch('/api/world/battle-maps/access', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId, battleMapAccessGranted: granted, sharedBattleMapIds: shared, battleMapViewport: viewport }),
+    })
+  }
+
+  async function handleViewportConfirm(viewport: MapViewport) {
+    setMapViewport(viewport)
+    await saveAccess(mapAccessGranted, sharedMapIds, viewport)
+    setViewportTarget(null)
+  }
+
+  if (loading) return <p className="text-stone-400 text-center py-8">Loading battle maps…</p>
+
+  return (
+    <div className="space-y-6">
+      {/* Access toggle */}
+      <div className="bg-stone-900 border border-stone-800 rounded-lg p-4 flex items-center justify-between">
+        <div>
+          <p className="font-medium text-stone-200">Party Battle Map Access</p>
+          <p className="text-xs text-stone-500 mt-0.5">Grant players the Battle Map tab in their panel</p>
+        </div>
+        <button
+          onClick={() => void toggleAccess()}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            mapAccessGranted
+              ? 'bg-red-900/60 border border-red-800 text-red-300 hover:bg-red-900'
+              : 'bg-amber-900/60 border border-amber-800 text-amber-300 hover:bg-amber-900'
+          }`}
+        >
+          {mapAccessGranted ? 'Revoke Access' : 'Grant Access'}
+        </button>
+      </div>
+
+      {/* Upload form */}
+      <div className="bg-stone-900 border border-stone-800 rounded-lg p-4 space-y-3">
+        <h3 className="font-medium text-stone-200">Upload Battle Map</h3>
+        <input
+          type="text"
+          placeholder="Map name"
+          value={uploadName}
+          onChange={e => setUploadName(e.target.value)}
+          className="w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm text-stone-200 placeholder-stone-500"
+        />
+        <div className="flex gap-2">
+          {(['town', 'city', 'world', 'dungeon'] as MapType[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setUploadType(t)}
+              className={`flex-1 py-1.5 rounded text-xs font-medium border transition-colors ${
+                uploadType === t ? MAP_TYPE_COLORS[t] : 'border-stone-700 text-stone-500 hover:text-stone-300'
+              }`}
+            >
+              {MAP_TYPE_LABELS[t]}
+            </button>
+          ))}
+        </div>
+        <label className={`block border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+          uploadFile ? 'border-amber-700 bg-amber-950/20' : 'border-stone-700 hover:border-stone-600'
+        }`}>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+          />
+          <span className="text-sm text-stone-400">
+            {uploadFile ? uploadFile.name : 'Click to select image (JPEG, PNG, WebP, GIF — max 10 MB)'}
+          </span>
+        </label>
+        <button
+          onClick={() => void handleUpload()}
+          disabled={!uploadFile || !uploadName.trim() || uploading}
+          className="w-full py-2 rounded-lg bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+        >
+          {uploading ? 'Uploading…' : 'Upload'}
+        </button>
+      </div>
+
+      {/* Map list */}
+      {maps.length === 0 ? (
+        <p className="text-stone-500 text-center py-4 text-sm">No battle maps uploaded yet.</p>
+      ) : (
+        <div className="space-y-3">
+          <h3 className="font-medium text-stone-200">Uploaded Battle Maps</h3>
+          {maps.map(map => {
+            const isShared = sharedMapIds.includes(map.id)
+            const hasViewport = mapViewport?.mapId === map.id
+            return (
+              <div key={map.id} className="bg-stone-900 border border-stone-800 rounded-lg overflow-hidden">
+                <div className="flex gap-3 p-3">
+                  {/* Thumbnail */}
+                  <div className="w-20 h-14 rounded overflow-hidden bg-stone-800 flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={map.imageUrl} alt={map.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-stone-200 truncate">{map.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded border ${MAP_TYPE_COLORS[map.type]}`}>
+                        {MAP_TYPE_LABELS[map.type]}
+                      </span>
+                      {hasViewport && (
+                        <span className="text-xs px-1.5 py-0.5 rounded border text-amber-400 bg-amber-950/50 border-amber-900/50">
+                          Viewport set
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      <button
+                        onClick={() => setEditingMap(map)}
+                        className="px-2.5 py-1 rounded text-xs font-medium border border-amber-800 bg-amber-950/40 text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        ⚔ Open Battle View
+                      </button>
+                      <button
+                        onClick={() => void toggleShare(map.id)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                          isShared
+                            ? 'bg-emerald-900/50 border-emerald-800 text-emerald-300 hover:bg-emerald-900'
+                            : 'border-stone-700 text-stone-500 hover:text-stone-300'
+                        }`}
+                      >
+                        {isShared ? 'Shared' : 'Share'}
+                      </button>
+                      <button
+                        onClick={() => setViewportTarget(map)}
+                        className="px-2.5 py-1 rounded text-xs font-medium border border-stone-700 text-stone-500 hover:text-stone-300 transition-colors"
+                      >
+                        {hasViewport ? 'Edit Viewport' : 'Set Viewport'}
+                      </button>
+                      {hasViewport && (
+                        <button
+                          onClick={() => void (async () => {
+                            const newVp = null
+                            setMapViewport(newVp)
+                            await saveAccess(mapAccessGranted, sharedMapIds, newVp)
+                          })()}
+                          className="px-2.5 py-1 rounded text-xs font-medium border border-stone-700 text-stone-500 hover:text-red-400 transition-colors"
+                        >
+                          Clear Viewport
+                        </button>
+                      )}
+                      <button
+                        onClick={() => void handleDelete(map)}
+                        className="px-2.5 py-1 rounded text-xs font-medium border border-stone-700 text-stone-500 hover:text-red-400 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Viewport selector modal */}
+      {viewportTarget && (
+        <ViewportSelector
+          map={viewportTarget}
+          existing={mapViewport?.mapId === viewportTarget.id ? mapViewport : null}
+          onConfirm={vp => void handleViewportConfirm(vp)}
+          onCancel={() => setViewportTarget(null)}
+        />
+      )}
+
+      {editingMap && (
+        <BattleMapEditor
+          campaignId={campaignId}
+          battleMap={editingMap}
+          characters={characters}
+          onClose={() => setEditingMap(null)}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Viewport Selector Modal ───────────────────────────────────────────────────
 
 type DrawMode = 'rect' | 'circle' | 'polygon'
@@ -3553,11 +3803,11 @@ function ViewportSelector({
     return () => ro.disconnect()
   }, [])
 
-  function toPx(e: React.MouseEvent): { x: number; y: number } {
+  function toPx(point: { clientX: number; clientY: number }): { x: number; y: number } {
     const rect = containerRef.current!.getBoundingClientRect()
     return {
-      x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
-      y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
+      x: Math.max(0, Math.min(rect.width, point.clientX - rect.left)),
+      y: Math.max(0, Math.min(rect.height, point.clientY - rect.top)),
     }
   }
 
@@ -3569,9 +3819,7 @@ function ViewportSelector({
     return { x: n.x * containerSize.w, y: n.y * containerSize.h }
   }
 
-  function onMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    const pt = toPx(e)
+  function handleDrawStart(pt: { x: number; y: number }) {
     if (drawMode === 'polygon') {
       setPolygonPx(prev => [...prev, pt])
       return
@@ -3581,15 +3829,14 @@ function ViewportSelector({
     setCurrentPx(pt)
   }
 
-  function onMouseMove(e: React.MouseEvent) {
+  function handleDrawMove(pt: { x: number; y: number }) {
     if (!drawing || drawMode === 'polygon') return
-    setCurrentPx(toPx(e))
+    setCurrentPx(pt)
   }
 
-  function onMouseUp(e: React.MouseEvent) {
+  function handleDrawEnd(endPx: { x: number; y: number }) {
     if (!drawing || drawMode === 'polygon') return
     setDrawing(false)
-    const endPx = toPx(e)
     if (drawMode === 'rect') {
       const x = Math.min(startPx.x, endPx.x) / containerSize.w
       const y = Math.min(startPx.y, endPx.y) / containerSize.h
@@ -3604,6 +3851,39 @@ function ViewportSelector({
       const r = rPx / containerSize.w
       setDraft({ mapId: map.id, shape: 'circle', cx, cy, r })
     }
+  }
+
+  function onMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    handleDrawStart(toPx(e))
+  }
+
+  function onMouseMove(e: React.MouseEvent) {
+    handleDrawMove(toPx(e))
+  }
+
+  function onMouseUp(e: React.MouseEvent) {
+    handleDrawEnd(toPx(e))
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    e.preventDefault()
+    const t = e.touches[0]
+    if (!t) return
+    handleDrawStart(toPx(t))
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    e.preventDefault()
+    const t = e.touches[0]
+    if (!t) return
+    handleDrawMove(toPx(t))
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    const t = e.changedTouches[0]
+    if (!t) return
+    handleDrawEnd(toPx(t))
   }
 
   function confirmPolygon() {
@@ -3701,10 +3981,13 @@ function ViewportSelector({
         <div
           ref={containerRef}
           className="relative select-none inline-block"
-          style={{ cursor: 'crosshair' }}
+          style={{ cursor: 'crosshair', touchAction: 'none' }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
