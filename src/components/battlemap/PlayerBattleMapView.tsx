@@ -16,6 +16,7 @@ export function PlayerBattleMapView({ battleMap }: { battleMap: CampaignMap }) {
   const [fogStrokes, setFogStrokes] = useState<FogStroke[]>([])
   const [annotations, setAnnotations] = useState<BattleMapAnnotation[]>([])
   const [pings, setPings] = useState<{ id: string; x: number; y: number }[]>([])
+  const [loading, setLoading] = useState(true)
 
   async function loadTokens() {
     const data = await fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}&forPlayers=true`).then(r => r.json())
@@ -31,7 +32,8 @@ export function PlayerBattleMapView({ battleMap }: { battleMap: CampaignMap }) {
   }
 
   useEffect(() => {
-    void loadTokens(); void loadFog(); void loadAnnotations()
+    setLoading(true)
+    void Promise.all([loadTokens(), loadFog(), loadAnnotations()]).then(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleMap.id])
 
@@ -75,6 +77,14 @@ export function PlayerBattleMapView({ battleMap }: { battleMap: CampaignMap }) {
   function pathFor(points: { x: number; y: number }[]): string {
     if (points.length === 0) return ''
     return `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`
+  }
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-stone-950">
+        <p className="text-stone-500 text-sm">Loading map…</p>
+      </div>
+    )
   }
 
   return (
