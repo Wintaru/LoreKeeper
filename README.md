@@ -58,9 +58,26 @@ Node.js is the engine that runs the app.
 
 Docker runs the local database (Supabase) on your machine.
 
+**Windows users — enable WSL2 first:**
+
+Docker on Windows requires WSL2 (Windows Subsystem for Linux 2). To enable it:
+
+1. Open the Start menu, search for **PowerShell**, right-click it, and choose **Run as administrator**
+2. Run this command:
+   ```
+   wsl --install
+   ```
+3. Restart your computer when prompted
+4. After restarting, a terminal window may open to finish the Ubuntu setup — follow the prompts to create a username and password
+
+If `wsl --install` says WSL is already installed, you're good — move on to the Docker install below.
+
+**Install Docker Desktop (all platforms):**
+
 1. Go to [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
 2. Click **Download Docker Desktop** for your operating system
 3. Run the installer — the default options are fine
+   - On Windows, make sure **"Use WSL 2 instead of Hyper-V"** is checked (it usually is by default)
 4. Launch Docker Desktop after installation
 5. Wait until the whale icon in your menu bar (macOS) or system tray (Windows) stops animating — this means Docker is ready
 6. Verify it's running:
@@ -76,7 +93,7 @@ Docker runs the local database (Supabase) on your machine.
 
 The Supabase CLI manages your local database.
 
-**macOS (using Homebrew):**
+**macOS:**
 
 First check if Homebrew is installed:
 ```
@@ -91,12 +108,32 @@ Then install Supabase:
 brew install supabase/tap/supabase
 ```
 
-**Windows / any OS (using npm):**
+**Windows:**
+
+> **Do not use `npm install -g supabase` on Windows** — the npm package may download the wrong binary for your processor and silently fail. Use one of these instead:
+
+Option A — **Scoop** (recommended, easy to use):
+1. Open PowerShell and run:
+   ```
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+   ```
+2. Then install Supabase:
+   ```
+   scoop install supabase
+   ```
+
+Option B — **Winget** (built into Windows 10/11):
 ```
-npm install -g supabase
+winget install Supabase.CLI
 ```
 
-Verify the install:
+Option C — **Direct download:**
+1. Go to [github.com/supabase/cli/releases](https://github.com/supabase/cli/releases)
+2. Download the file ending in `windows_amd64.tar.gz` from the latest release
+3. Extract it and move `supabase.exe` to a folder that's in your PATH (e.g. `C:\Windows\System32`)
+
+After installing via any method, open a **new** terminal window and verify:
 ```
 supabase --version
 ```
@@ -220,6 +257,14 @@ supabase db reset
 ---
 
 ## Troubleshooting
+
+**`supabase` command not found after installing on Windows**
+
+Close your terminal window and open a new one — the PATH may not have updated in the existing session. If it still doesn't work, you installed via npm (which can download the wrong binary on Windows). Uninstall it (`npm uninstall -g supabase`) and reinstall using Scoop or Winget as described in Step 4.
+
+**`supabase start` fails on Windows with a Docker or image error**
+
+Make sure WSL2 is enabled (Step 3) and that Docker Desktop is using the WSL2 backend: open Docker Desktop → Settings → General → confirm "Use the WSL 2 based engine" is checked. Restart Docker Desktop and try again.
 
 **`supabase start` says a port is already in use**
 

@@ -46,6 +46,21 @@ All layer implementations are thin shells with `HandlerResolver` instances. All 
 - Row-level security must be configured — players may only read/write their own character within a campaign
 - Campaign codes are the auth boundary; DM PIN hash is stored (never the raw PIN)
 
+### RLS checklist for every new table
+
+Every `CREATE TABLE` migration must include all four of these before the file ends:
+
+```sql
+ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "<table>_select" ON <table> FOR SELECT USING (true);
+CREATE POLICY "<table>_insert" ON <table> FOR INSERT WITH CHECK ((SELECT auth.role()) = 'service_role');
+CREATE POLICY "<table>_update" ON <table> FOR UPDATE USING ((SELECT auth.role()) = 'service_role');
+CREATE POLICY "<table>_delete" ON <table> FOR DELETE USING ((SELECT auth.role()) = 'service_role');
+```
+
+`SELECT` is open (Realtime subscriptions require it). All mutations are locked to `service_role` (API routes use the service-role key; the anon key is never given write access). If a table needs tighter select rules, add a `campaign_id` or `character_id` check instead of `true`.
+
 ---
 
 ## Web Push / Fate Engine
