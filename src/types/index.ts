@@ -22,6 +22,8 @@ export interface Npc {
   lastLocation: string | null
   notes: string | null
   relationships: NpcRelationship[]
+  imageUrl: string | null
+  imageStoragePath: string | null
   createdAt: Date
 }
 
@@ -31,6 +33,8 @@ export interface Location {
   name: string
   visited: boolean
   notes: string | null
+  imageUrl: string | null
+  imageStoragePath: string | null
   createdAt: Date
 }
 

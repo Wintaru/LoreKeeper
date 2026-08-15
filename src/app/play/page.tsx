@@ -298,7 +298,6 @@ export default function PlayerJoinPage() {
     setScanRegion(0)
     setScanMessage(null)
     const COLS = 2, ROWS = 3
-    const TOTAL = COLS * ROWS
     try {
       const { createWorker } = await import('tesseract.js')
       const imageUrl = URL.createObjectURL(file)
@@ -428,6 +427,7 @@ export default function PlayerJoinPage() {
               ref={fileRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              capture="environment"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) void handleScan(f) }}
             />
@@ -521,7 +521,7 @@ export default function PlayerJoinPage() {
 
               <div>
                 <p className="text-xs text-stone-500 uppercase tracking-wider mb-2">Ability Scores</p>
-                <div className="grid grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                   {ABILITY_KEYS.map(key => (
                     <div key={key}>
                       <p className="text-center text-xs text-stone-500 mb-1">{ABILITY_LABELS[key]}</p>

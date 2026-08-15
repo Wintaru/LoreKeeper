@@ -9,6 +9,8 @@ export class StoreNpcRequest extends RequestBase {
     public readonly lastLocation: string | null = null,
     public readonly notes: string | null = null,
     public readonly relationships: NpcRelationship[] = [],
+    public readonly imageUrl: string | null = null,
+    public readonly imageStoragePath: string | null = null,
   ) { super() }
 }
 
@@ -20,6 +22,14 @@ export class UpdateNpcRequest extends RequestBase {
     public readonly lastLocation: string | null = null,
     public readonly notes: string | null = null,
     public readonly relationships: NpcRelationship[] = [],
+  ) { super() }
+}
+
+export class SetNpcImageRequest extends RequestBase {
+  constructor(
+    public readonly npcId: string,
+    public readonly imageUrl: string | null,
+    public readonly imageStoragePath: string | null,
   ) { super() }
 }
 
@@ -35,6 +45,8 @@ export class StoreLocationRequest extends RequestBase {
   constructor(
     public readonly campaignId: string,
     public readonly name: string,
+    public readonly imageUrl: string | null = null,
+    public readonly imageStoragePath: string | null = null,
   ) { super() }
 }
 
@@ -43,6 +55,14 @@ export class UpdateLocationRequest extends RequestBase {
     public readonly locationId: string,
     public readonly visited: boolean,
     public readonly notes: string | null = null,
+  ) { super() }
+}
+
+export class SetLocationImageRequest extends RequestBase {
+  constructor(
+    public readonly locationId: string,
+    public readonly imageUrl: string | null,
+    public readonly imageStoragePath: string | null,
   ) { super() }
 }
 

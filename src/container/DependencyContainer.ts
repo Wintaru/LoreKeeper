@@ -145,8 +145,10 @@ import { DrawFateRequest, RevealFateRequest, GetFateLogRequest, GetPendingFateRe
 import { WorldAccessor } from '@/accessors/world/WorldAccessor'
 import { StoreNpcHandler } from '@/accessors/world/handlers/StoreNpcHandler'
 import { UpdateNpcHandler } from '@/accessors/world/handlers/UpdateNpcHandler'
+import { SetNpcImageHandler as AccessorSetNpcImageHandler } from '@/accessors/world/handlers/SetNpcImageHandler'
 import { StoreLocationHandler } from '@/accessors/world/handlers/StoreLocationHandler'
 import { UpdateLocationHandler } from '@/accessors/world/handlers/UpdateLocationHandler'
+import { SetLocationImageHandler as AccessorSetLocationImageHandler } from '@/accessors/world/handlers/SetLocationImageHandler'
 import { StoreSessionNoteHandler } from '@/accessors/world/handlers/StoreSessionNoteHandler'
 import { UpdateCampaignInventoryHandler } from '@/accessors/world/handlers/UpdateCampaignInventoryHandler'
 import { UpdateCharacterLootHandler as AccessorUpdateCharacterLootHandler } from '@/accessors/world/handlers/UpdateCharacterLootHandler'
@@ -176,8 +178,10 @@ import { RemoveQuestHandler } from '@/accessors/world/handlers/RemoveQuestHandle
 import {
   StoreNpcRequest,
   UpdateNpcRequest,
+  SetNpcImageRequest as AccessorSetNpcImageRequest,
   StoreLocationRequest,
   UpdateLocationRequest as AccessorUpdateLocationRequest,
+  SetLocationImageRequest as AccessorSetLocationImageRequest,
   StoreSessionNoteRequest,
   UpdateCampaignInventoryRequest,
   UpdateCharacterLootRequest as AccessorUpdateCharacterLootRequest,
@@ -246,9 +250,11 @@ import { WorldManager } from '@/managers/world/WorldManager'
 import { AddNpcHandler } from '@/managers/world/handlers/AddNpcHandler'
 import { EditNpcHandler } from '@/managers/world/handlers/EditNpcHandler'
 import { DeleteNpcHandler } from '@/managers/world/handlers/DeleteNpcHandler'
+import { SetNpcImageHandler } from '@/managers/world/handlers/SetNpcImageHandler'
 import { AddLocationHandler } from '@/managers/world/handlers/AddLocationHandler'
 import { UpdateLocationHandler as ManagerUpdateLocationHandler } from '@/managers/world/handlers/UpdateLocationHandler'
 import { DeleteLocationHandler } from '@/managers/world/handlers/DeleteLocationHandler'
+import { SetLocationImageHandler } from '@/managers/world/handlers/SetLocationImageHandler'
 import { AddSessionNoteHandler } from '@/managers/world/handlers/AddSessionNoteHandler'
 import { DeleteSessionNoteHandler } from '@/managers/world/handlers/DeleteSessionNoteHandler'
 import { UpdateInventoryHandler } from '@/managers/world/handlers/UpdateInventoryHandler'
@@ -277,9 +283,11 @@ import {
   AddNpcRequest,
   EditNpcRequest,
   DeleteNpcRequest,
+  SetNpcImageRequest,
   AddLocationRequest,
   UpdateLocationRequest as ManagerUpdateLocationRequest,
   DeleteLocationRequest,
+  SetLocationImageRequest,
   AddSessionNoteRequest,
   DeleteSessionNoteRequest,
   UpdateInventoryRequest,
@@ -500,8 +508,10 @@ export function createContainer(): Container {
     new HandlerResolverBuilder()
       .register(StoreNpcRequest, new StoreNpcHandler(db))
       .register(UpdateNpcRequest, new UpdateNpcHandler(db))
+      .register(AccessorSetNpcImageRequest, new AccessorSetNpcImageHandler(db))
       .register(StoreLocationRequest, new StoreLocationHandler(db))
       .register(AccessorUpdateLocationRequest, new UpdateLocationHandler(db))
+      .register(AccessorSetLocationImageRequest, new AccessorSetLocationImageHandler(db))
       .register(StoreSessionNoteRequest, new StoreSessionNoteHandler(db))
       .register(UpdateCampaignInventoryRequest, new UpdateCampaignInventoryHandler(db))
       .register(AccessorUpdateCharacterLootRequest, new AccessorUpdateCharacterLootHandler(db))
@@ -540,9 +550,11 @@ export function createContainer(): Container {
       .register(AddNpcRequest, new AddNpcHandler(worldAccessor))
       .register(EditNpcRequest, new EditNpcHandler(worldAccessor))
       .register(DeleteNpcRequest, new DeleteNpcHandler(worldAccessor))
+      .register(SetNpcImageRequest, new SetNpcImageHandler(worldAccessor))
       .register(AddLocationRequest, new AddLocationHandler(worldAccessor))
       .register(ManagerUpdateLocationRequest, new ManagerUpdateLocationHandler(worldAccessor))
       .register(DeleteLocationRequest, new DeleteLocationHandler(worldAccessor))
+      .register(SetLocationImageRequest, new SetLocationImageHandler(worldAccessor))
       .register(AddSessionNoteRequest, new AddSessionNoteHandler(worldAccessor))
       .register(DeleteSessionNoteRequest, new DeleteSessionNoteHandler(worldAccessor))
       .register(UpdateInventoryRequest, new UpdateInventoryHandler(worldAccessor))

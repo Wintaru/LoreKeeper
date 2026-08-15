@@ -20,6 +20,8 @@ export class StoreNpcHandler implements IHandler {
         last_location: req.lastLocation,
         notes: req.notes,
         relationships: req.relationships,
+        image_url: req.imageUrl,
+        image_storage_path: req.imageStoragePath,
       })
       .select()
       .single()
@@ -40,6 +42,8 @@ export function rowToNpc(row: Record<string, unknown>): Npc {
     lastLocation: (row.last_location as string) ?? null,
     notes: (row.notes as string) ?? null,
     relationships: (row.relationships as NpcRelationship[]) ?? [],
+    imageUrl: (row.image_url as string) ?? null,
+    imageStoragePath: (row.image_storage_path as string) ?? null,
     createdAt: new Date(row.created_at as string),
   }
 }

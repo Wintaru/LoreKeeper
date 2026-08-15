@@ -16,6 +16,8 @@ export class StoreLocationHandler implements IHandler {
       .insert({
         campaign_id: req.campaignId,
         name: req.name,
+        image_url: req.imageUrl,
+        image_storage_path: req.imageStoragePath,
       })
       .select()
       .single()
@@ -34,6 +36,8 @@ export function rowToLocation(row: Record<string, unknown>): Location {
     name: row.name as string,
     visited: row.visited as boolean,
     notes: (row.notes as string) ?? null,
+    imageUrl: (row.image_url as string) ?? null,
+    imageStoragePath: (row.image_storage_path as string) ?? null,
     createdAt: new Date(row.created_at as string),
   }
 }

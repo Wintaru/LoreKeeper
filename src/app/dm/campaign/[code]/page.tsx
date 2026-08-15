@@ -178,6 +178,13 @@ export default function DmControlPanel() {
           <button onClick={() => setShowDice(v => !v)}
             className={`text-lg px-2 py-1 rounded transition-colors ${showDice ? 'text-amber-400 bg-amber-950/40' : 'text-stone-500 hover:text-stone-300'}`}
             title="Dice roller">🎲</button>
+          {campaignId && (
+            <a
+              href={`/api/campaigns/export?campaignId=${campaignId}`}
+              className="text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-stone-700 text-stone-500 hover:text-stone-300 transition-colors"
+              title="Export campaign packet (.zip)"
+            >⬇</a>
+          )}
           <button
             onClick={() => setShowShortcuts(v => !v)}
             className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded border transition-colors ${showShortcuts ? 'text-amber-400 bg-amber-950/40 border-amber-700/50' : 'text-stone-500 hover:text-stone-300 border-stone-700'}`}

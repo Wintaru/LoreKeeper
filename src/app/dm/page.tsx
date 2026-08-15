@@ -92,6 +92,10 @@ export default function DmHomePage() {
           Returning DM?{' '}
           <a href="/dm/rejoin" className="text-amber-400 hover:underline">Rejoin your campaign</a>
         </p>
+        <p className="text-center text-stone-500 text-sm">
+          Have a campaign packet?{' '}
+          <a href="/dm/import" className="text-amber-400 hover:underline">Import a campaign</a>
+        </p>
       </div>
     </main>
   )
