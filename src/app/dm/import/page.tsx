@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 interface ImportResult {
   campaignCode: string
@@ -70,9 +71,33 @@ export default function ImportCampaignPage() {
     try {
       let res: Response
       if (mode === 'file' && file) {
-        const fd = new FormData()
-        fd.append('file', file)
-        res = await fetch('/api/campaigns/import', { method: 'POST', body: fd })
+        const urlRes = await fetch('/api/campaigns/import/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name }),
+        })
+        const urlData: unknown = await urlRes.json()
+        if (!urlRes.ok) {
+          const err = (urlData as Record<string, unknown>)?.error
+          setError(typeof err === 'string' ? err : 'Could not start the upload')
+          return
+        }
+        const { path, token } = urlData as { path: string; token: string }
+
+        const supabase = createClient()
+        const { error: uploadError } = await supabase.storage
+          .from('campaign-packet-uploads')
+          .uploadToSignedUrl(path, token, file)
+        if (uploadError) {
+          setError(`Upload failed: ${uploadError.message}`)
+          return
+        }
+
+        res = await fetch('/api/campaigns/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storagePath: path, filename: file.name }),
+        })
       } else {
         res = await fetch('/api/campaigns/import', {
           method: 'POST',
