@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, BattleMap, MapViewport, MapType, InitiativeRequest, Quest } from '@/types'
@@ -165,9 +166,12 @@ export default function DmControlPanel() {
   return (
     <main className="min-h-screen bg-stone-950 text-stone-100">
       <div className="border-b border-stone-800 px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">DM Panel</h1>
-          <p className="text-stone-400 font-mono text-xs">{code.toUpperCase()}</p>
+        <div className="flex items-center gap-3">
+          <Image src="/lorekeeper-logo.png" alt="" width={36} height={36} className="opacity-90" />
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">DM Panel</h1>
+            <p className="text-stone-400 font-mono text-xs">{code.toUpperCase()}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {combatSession && (

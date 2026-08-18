@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 export default function HomePage() {
@@ -5,6 +6,14 @@ export default function HomePage() {
     <main className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-8 text-center">
         <div>
+          <Image
+            src="/lorekeeper-logo.png"
+            alt="LoreKeeper"
+            width={140}
+            height={140}
+            className="mx-auto mb-2"
+            priority
+          />
           <h1 className="text-4xl font-bold tracking-tight">LoreKeeper</h1>
           <p className="text-stone-400 mt-2">Your D&amp;D companion at the table</p>
         </div>
