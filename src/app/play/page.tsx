@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import type { AbilityScores, Character, Campaign } from '@/types'
 
 const D_AND_D_CLASSES = [
@@ -236,9 +237,11 @@ export default function PlayerJoinPage() {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [step, setStep] = useState<'code' | 'character'>('code')
+  const [step, setStep] = useState<'code' | 'rejoin' | 'character'>('code')
   const [campaignCode, setCampaignCode] = useState('')
   const [playerName, setPlayerName] = useState('')
+  const [lookingUp, setLookingUp] = useState(false)
+  const [existingCharacters, setExistingCharacters] = useState<Character[]>([])
 
   // Required
   const [characterName, setCharacterName] = useState('')
@@ -262,11 +265,36 @@ export default function PlayerJoinPage() {
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  function handleCodeSubmit(e: React.FormEvent) {
+  async function handleCodeSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (campaignCode.trim().length < 3) { setError('Enter a valid campaign code'); return }
+    if (!playerName.trim()) { setError('Enter your name'); return }
     setError(null)
-    setStep('character')
+    setLookingUp(true)
+    try {
+      const code = campaignCode.trim().toUpperCase()
+      const supabase = createClient()
+      const { data: campaign } = await supabase.from('campaigns').select('id').eq('code', code).single()
+      if (!campaign) { setError('Campaign not found'); return }
+      const res = await fetch(`/api/campaigns/roster?campaignId=${campaign.id as string}`)
+      const data: unknown = await res.json()
+      const characters = isRosterResponse(data) ? data.characters : []
+      if (characters.length > 0) {
+        setExistingCharacters(characters)
+        setStep('rejoin')
+      } else {
+        setStep('character')
+      }
+    } catch {
+      setError('Something went wrong — try again')
+    } finally {
+      setLookingUp(false)
+    }
+  }
+
+  function handleRejoinSelect(character: Character) {
+    localStorage.setItem(`character_${campaignCode.trim().toUpperCase()}`, character.id)
+    router.push(`/play/campaign/${campaignCode.trim().toUpperCase()}`)
   }
 
   function applyParsed(parsed: ParsedSheet) {
@@ -371,7 +399,7 @@ export default function PlayerJoinPage() {
         setError(isErrorResponse(data) ? data.error : 'Failed to join campaign')
         return
       }
-      sessionStorage.setItem(`character_${data.campaign.code}`, data.character.id)
+      localStorage.setItem(`character_${data.campaign.code}`, data.character.id)
       router.push(`/play/campaign/${data.campaign.code}`)
     } catch {
       setError('Something went wrong')
@@ -386,12 +414,12 @@ export default function PlayerJoinPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">LoreKeeper</h1>
           <p className="text-stone-400 mt-1">
-            {step === 'code' ? 'Enter your campaign code' : 'Create your character'}
+            {step === 'code' ? 'Enter your campaign code' : step === 'rejoin' ? 'Is this you?' : 'Create your character'}
           </p>
         </div>
 
         {step === 'code' ? (
-          <form onSubmit={handleCodeSubmit} className="space-y-4">
+          <form onSubmit={e => void handleCodeSubmit(e)} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-stone-300 mb-1">Campaign Code</label>
               <input
@@ -415,10 +443,42 @@ export default function PlayerJoinPage() {
               />
             </div>
             {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
-              Continue
+            <button type="submit" disabled={lookingUp} className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+              {lookingUp ? 'Looking up campaign…' : 'Continue'}
             </button>
           </form>
+        ) : step === 'rejoin' ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              {existingCharacters.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => handleRejoinSelect(c)}
+                  className="w-full text-left bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded-xl px-4 py-3 transition-colors"
+                >
+                  <p className="font-semibold text-stone-100">{c.characterName}</p>
+                  <p className="text-sm text-stone-400">{c.playerName} · {c.class} {c.level}</p>
+                </button>
+              ))}
+            </div>
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep('code')}
+                className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('character')}
+                className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                None of these — new character
+              </button>
+            </div>
+          </div>
         ) : (
           <form onSubmit={handleJoin} className="space-y-5">
 
@@ -599,7 +659,7 @@ export default function PlayerJoinPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep('code')}
+                onClick={() => setStep(existingCharacters.length > 0 ? 'rejoin' : 'code')}
                 className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 font-semibold py-2 px-4 rounded-lg transition-colors"
               >
                 Back
@@ -653,6 +713,11 @@ function buildAbilityScores(inputs: Partial<Record<keyof AbilityScores, string>>
   }
   if (Object.keys(parsed).length === 0) return null
   return { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, ...parsed }
+}
+
+function isRosterResponse(value: unknown): value is { characters: Character[] } {
+  return typeof value === 'object' && value !== null && 'characters' in value &&
+    Array.isArray((value as Record<string, unknown>).characters)
 }
 
 function isJoinResponse(value: unknown): value is { character: Character; campaign: Campaign } {

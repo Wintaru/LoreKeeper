@@ -86,8 +86,9 @@ export default function PlayerCampaignPage() {
   const [initiativeSubmitting, setInitiativeSubmitting] = useState(false)
   const [levelUpModal, setLevelUpModal] = useState<{ level: number; prevLevel: number } | null>(null)
   const prevLevelRef = useRef<number | null>(null)
-  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests'>('character')
+  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests' | 'roster'>('character')
   const [quests, setQuests] = useState<Quest[]>([])
+  const [roster, setRoster] = useState<Character[]>([])
   const [mapAccessGranted, setMapAccessGranted] = useState(false)
   const [sharedMapIds, setSharedMapIds] = useState<string[]>([])
   const [mapViewport, setMapViewport] = useState<MapViewport | null>(null)
@@ -100,7 +101,7 @@ export default function PlayerCampaignPage() {
   const [selectedBattleMapId, setSelectedBattleMapId] = useState<string | null>(null)
 
   const loadCharacter = useCallback(async (cid: string) => {
-    const characterId = sessionStorage.getItem(`character_${code.toUpperCase()}`)
+    const characterId = localStorage.getItem(`character_${code.toUpperCase()}`)
     if (!characterId) return
     const supabase = createClient()
     const { data } = await supabase
@@ -158,6 +159,12 @@ export default function PlayerCampaignPage() {
     if (isQuestsResponse(data)) setQuests(data.quests)
   }, [])
 
+  const fetchRoster = useCallback(async (cid: string) => {
+    const res = await fetch(`/api/campaigns/roster?campaignId=${cid}`)
+    const data: unknown = await res.json()
+    if (isRosterResponse(data)) setRoster(data.characters)
+  }, [])
+
   useEffect(() => {
     async function init() {
       const supabase = createClient()
@@ -165,11 +172,11 @@ export default function PlayerCampaignPage() {
       if (!data) { setLoading(false); return }
       const cid = data.id as string
       setCampaignId(cid)
-      await Promise.all([loadCharacter(cid), loadMapAccess(cid), loadBattleMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid)])
+      await Promise.all([loadCharacter(cid), loadMapAccess(cid), loadBattleMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid), fetchRoster(cid)])
       setLoading(false)
     }
     void init()
-  }, [code, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchInitiativeRequest, fetchQuests])
+  }, [code, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchInitiativeRequest, fetchQuests, fetchRoster])
 
   // Load fate log and whispers once character is known
   useEffect(() => {
@@ -274,13 +281,16 @@ export default function PlayerCampaignPage() {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'quests', filter: `campaign_id=eq.${campaignId}` },
         () => { void fetchQuests(campaignId) })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'characters', filter: `campaign_id=eq.${campaignId}` },
+        () => { void fetchRoster(campaignId) })
       .subscribe()
     return () => {
       void supabase.removeChannel(channel)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       if (whisperToastTimerRef.current) clearTimeout(whisperToastTimerRef.current)
     }
-  }, [character?.id, campaignId, loadFateLog, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchQuests])
+  }, [character?.id, campaignId, loadFateLog, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchQuests, fetchRoster])
 
   // Register service worker and subscribe to push.
   // Always run on character load so this browser's subscription is synced to the DB —
@@ -469,6 +479,10 @@ export default function PlayerCampaignPage() {
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'rulebook' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
             >Rulebook</button>
             <button
+              onClick={() => setPlayerTab('roster')}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'roster' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
+            >Roster</button>
+            <button
               onClick={() => setPlayerTab('quests')}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors relative ${playerTab === 'quests' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
             >
@@ -523,6 +537,14 @@ export default function PlayerCampaignPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-sm mx-auto p-4">
             <PlayerQuestsTab quests={quests} />
+          </div>
+        </div>
+      )}
+
+      {playerTab === 'roster' && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-sm mx-auto p-4">
+            <PlayerRosterTab roster={roster} selfId={character.id} />
           </div>
         </div>
       )}
@@ -1054,6 +1076,48 @@ function isInitiativeRequestResponse(v: unknown): v is { request: InitiativeRequ
 
 function isQuestsResponse(v: unknown): v is { quests: Quest[] } {
   return typeof v === 'object' && v !== null && 'quests' in v && Array.isArray((v as Record<string, unknown>).quests)
+}
+
+function isRosterResponse(v: unknown): v is { characters: Character[] } {
+  return typeof v === 'object' && v !== null && 'characters' in v && Array.isArray((v as Record<string, unknown>).characters)
+}
+
+// ── Player Roster Tab ──────────────────────────────────────────────────────────
+
+function PlayerRosterTab({ roster, selfId }: { roster: Character[]; selfId: string }) {
+  if (roster.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-stone-500 text-sm">No party members yet.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-stone-500 uppercase tracking-widest">Party ({roster.length})</p>
+      {roster.map(c => {
+        const hpPercent = c.maxHp > 0 ? Math.max(0, (c.currentHp / c.maxHp) * 100) : 0
+        const hpColor = hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
+        return (
+          <div key={c.id} className={`bg-stone-900 border rounded-xl p-3.5 space-y-2 ${c.id === selfId ? 'border-amber-700/50' : 'border-stone-800'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{c.characterName}</p>
+                <p className="text-xs text-stone-500 truncate">{c.playerName}</p>
+              </div>
+              <span className="text-sm font-bold font-mono tabular-nums shrink-0">
+                {c.currentHp}<span className="text-stone-500"> / {c.maxHp}</span>
+              </span>
+            </div>
+            <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPercent}%` }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // ── Player Quests Tab ──────────────────────────────────────────────────────────
