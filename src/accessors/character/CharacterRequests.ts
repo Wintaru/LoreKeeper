@@ -19,6 +19,10 @@ export class LoadRosterRequest extends RequestBase {
   constructor(public readonly campaignId: string) { super() }
 }
 
+export class LoadRosterSummaryRequest extends RequestBase {
+  constructor(public readonly campaignId: string) { super() }
+}
+
 export class UpdateCharacterHpRequest extends RequestBase {
   constructor(
     public readonly characterId: string,

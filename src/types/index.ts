@@ -221,6 +221,19 @@ export interface Character {
   createdAt: Date
 }
 
+// Lean, non-sensitive projection of Character for surfaces that don't need
+// (and shouldn't receive) backstory/currency/loot/pushSubscription — the
+// player-facing roster and the pre-join "is this you?" picker.
+export interface RosterSummary {
+  id: string
+  characterName: string
+  playerName: string
+  class: string
+  level: number
+  currentHp: number
+  maxHp: number
+}
+
 export interface Whisper {
   id: string
   characterId: string

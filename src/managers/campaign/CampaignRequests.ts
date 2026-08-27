@@ -23,6 +23,10 @@ export class GetRosterRequest extends RequestBase {
   constructor(public readonly campaignId: string) { super() }
 }
 
+export class GetRosterSummaryRequest extends RequestBase {
+  constructor(public readonly campaignId: string) { super() }
+}
+
 export class ValidateDmPinRequest extends RequestBase {
   constructor(
     public readonly campaignCode: string,

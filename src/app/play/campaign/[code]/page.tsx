@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, CustomCurrencyEntry, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest } from '@/types'
+import type { Character, CustomCurrencyEntry, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary } from '@/types'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { LevelUpModal } from '@/components/LevelUpModal'
@@ -88,7 +88,8 @@ export default function PlayerCampaignPage() {
   const prevLevelRef = useRef<number | null>(null)
   const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests' | 'roster'>('character')
   const [quests, setQuests] = useState<Quest[]>([])
-  const [roster, setRoster] = useState<Character[]>([])
+  const [roster, setRoster] = useState<RosterSummary[]>([])
+  const rosterRequestId = useRef(0)
   const [mapAccessGranted, setMapAccessGranted] = useState(false)
   const [sharedMapIds, setSharedMapIds] = useState<string[]>([])
   const [mapViewport, setMapViewport] = useState<MapViewport | null>(null)
@@ -109,6 +110,7 @@ export default function PlayerCampaignPage() {
       .select()
       .eq('id', characterId)
       .eq('campaign_id', cid)
+      .eq('is_active', true) // a kicked character must stop loading, not just disappear from rosters
       .single()
     if (data) setCharacter(rowToCharacter(data))
   }, [code])
@@ -160,8 +162,12 @@ export default function PlayerCampaignPage() {
   }, [])
 
   const fetchRoster = useCallback(async (cid: string) => {
-    const res = await fetch(`/api/campaigns/roster?campaignId=${cid}`)
+    const requestId = ++rosterRequestId.current
+    const res = await fetch(`/api/campaigns/roster-summary?campaignId=${cid}`)
     const data: unknown = await res.json()
+    // Discard this response if a newer fetchRoster call has since started —
+    // otherwise a slow request can resolve last and revert the roster to stale data.
+    if (requestId !== rosterRequestId.current) return
     if (isRosterResponse(data)) setRoster(data.characters)
   }, [])
 
@@ -451,7 +457,18 @@ export default function PlayerCampaignPage() {
         <div className="max-w-sm mx-auto">
           <h1 className="text-2xl font-bold">{character.characterName}</h1>
           <p className="text-stone-400">{character.playerName} · {character.class} {character.level}</p>
-          <p className="font-mono text-stone-500 text-xs mt-0.5">{code.toUpperCase()}</p>
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-stone-500 text-xs mt-0.5">{code.toUpperCase()}</p>
+            <button
+              onClick={() => {
+                localStorage.removeItem(`character_${code.toUpperCase()}`)
+                window.location.href = '/play'
+              }}
+              className="text-xs text-stone-500 hover:text-amber-400 underline underline-offset-2 mt-0.5"
+            >
+              Not you? Switch character
+            </button>
+          </div>
           {/* Tab bar */}
           <div className="flex mt-3">
             <button
@@ -1078,13 +1095,13 @@ function isQuestsResponse(v: unknown): v is { quests: Quest[] } {
   return typeof v === 'object' && v !== null && 'quests' in v && Array.isArray((v as Record<string, unknown>).quests)
 }
 
-function isRosterResponse(v: unknown): v is { characters: Character[] } {
+function isRosterResponse(v: unknown): v is { characters: RosterSummary[] } {
   return typeof v === 'object' && v !== null && 'characters' in v && Array.isArray((v as Record<string, unknown>).characters)
 }
 
 // ── Player Roster Tab ──────────────────────────────────────────────────────────
 
-function PlayerRosterTab({ roster, selfId }: { roster: Character[]; selfId: string }) {
+function PlayerRosterTab({ roster, selfId }: { roster: RosterSummary[]; selfId: string }) {
   if (roster.length === 0) {
     return (
       <div className="text-center py-16">

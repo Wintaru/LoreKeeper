@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { AbilityScores, Character, Campaign } from '@/types'
+import type { AbilityScores, Character, Campaign, RosterSummary } from '@/types'
 
 const D_AND_D_CLASSES = [
   'Artificer', 'Barbarian', 'Bard', 'Blood Hunter', 'Cleric', 'Druid',
@@ -241,7 +241,7 @@ export default function PlayerJoinPage() {
   const [campaignCode, setCampaignCode] = useState('')
   const [playerName, setPlayerName] = useState('')
   const [lookingUp, setLookingUp] = useState(false)
-  const [existingCharacters, setExistingCharacters] = useState<Character[]>([])
+  const [existingCharacters, setExistingCharacters] = useState<RosterSummary[]>([])
 
   // Required
   const [characterName, setCharacterName] = useState('')
@@ -270,17 +270,24 @@ export default function PlayerJoinPage() {
     if (campaignCode.trim().length < 3) { setError('Enter a valid campaign code'); return }
     if (!playerName.trim()) { setError('Enter your name'); return }
     setError(null)
+    setExistingCharacters([]) // clear any stale roster from a previously-looked-up code
     setLookingUp(true)
     try {
       const code = campaignCode.trim().toUpperCase()
       const supabase = createClient()
-      const { data: campaign } = await supabase.from('campaigns').select('id').eq('code', code).single()
-      if (!campaign) { setError('Campaign not found'); return }
-      const res = await fetch(`/api/campaigns/roster?campaignId=${campaign.id as string}`)
+      const { data: campaign, error: lookupError } = await supabase.from('campaigns').select('id').eq('code', code).single()
+      if (lookupError || !campaign) { setError('Campaign not found'); return }
+      const res = await fetch(`/api/campaigns/roster-summary?campaignId=${campaign.id as string}`)
+      if (!res.ok) { setError('Something went wrong — try again'); return }
       const data: unknown = await res.json()
-      const characters = isRosterResponse(data) ? data.characters : []
-      if (characters.length > 0) {
-        setExistingCharacters(characters)
+      if (!isRosterResponse(data)) { setError('Something went wrong — try again'); return }
+      // Only ever show characters that belong to the name just typed — showing
+      // the whole roster here would let anyone who knows the campaign code
+      // browse and take over any other player's character with zero verification.
+      const typedName = playerName.trim().toLowerCase()
+      const mine = data.characters.filter(c => c.playerName.toLowerCase() === typedName)
+      if (mine.length > 0) {
+        setExistingCharacters(mine)
         setStep('rejoin')
       } else {
         setStep('character')
@@ -292,7 +299,7 @@ export default function PlayerJoinPage() {
     }
   }
 
-  function handleRejoinSelect(character: Character) {
+  function handleRejoinSelect(character: RosterSummary) {
     localStorage.setItem(`character_${campaignCode.trim().toUpperCase()}`, character.id)
     router.push(`/play/campaign/${campaignCode.trim().toUpperCase()}`)
   }
@@ -715,7 +722,7 @@ function buildAbilityScores(inputs: Partial<Record<keyof AbilityScores, string>>
   return { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, ...parsed }
 }
 
-function isRosterResponse(value: unknown): value is { characters: Character[] } {
+function isRosterResponse(value: unknown): value is { characters: RosterSummary[] } {
   return typeof value === 'object' && value !== null && 'characters' in value &&
     Array.isArray((value as Record<string, unknown>).characters)
 }

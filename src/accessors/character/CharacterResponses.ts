@@ -1,5 +1,5 @@
 import { ResponseBase } from '@/common/ResponseBase'
-import type { Character } from '@/types'
+import type { Character, RosterSummary } from '@/types'
 
 export class StoreCharacterResponse extends ResponseBase {
   readonly correlationId: string
@@ -23,6 +23,21 @@ export class LoadRosterResponse extends ResponseBase {
   readonly characters: Character[]
 
   constructor(correlationId: string, characters: Character[], errorMessage?: string) {
+    super()
+    this.correlationId = correlationId
+    this.characters = characters
+    this.success = errorMessage === undefined
+    this.errorMessage = errorMessage ?? null
+  }
+}
+
+export class LoadRosterSummaryResponse extends ResponseBase {
+  readonly correlationId: string
+  readonly success: boolean
+  readonly errorMessage: string | null
+  readonly characters: RosterSummary[]
+
+  constructor(correlationId: string, characters: RosterSummary[], errorMessage?: string) {
     super()
     this.correlationId = correlationId
     this.characters = characters

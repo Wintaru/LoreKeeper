@@ -11,6 +11,7 @@ import { StoreCampaignRequest, LoadCampaignByCodeRequest } from '@/accessors/cam
 import { CharacterAccessor } from '@/accessors/character/CharacterAccessor'
 import { StoreCharacterHandler } from '@/accessors/character/handlers/StoreCharacterHandler'
 import { LoadRosterHandler } from '@/accessors/character/handlers/LoadRosterHandler'
+import { LoadRosterSummaryHandler } from '@/accessors/character/handlers/LoadRosterSummaryHandler'
 import { UpdateCharacterHpHandler } from '@/accessors/character/handlers/UpdateCharacterHpHandler'
 import { UpdateConditionsHandler as AccessorUpdateConditionsHandler } from '@/accessors/character/handlers/UpdateConditionsHandler'
 import { UpdateDeathSavesHandler as AccessorUpdateDeathSavesHandler } from '@/accessors/character/handlers/UpdateDeathSavesHandler'
@@ -24,6 +25,7 @@ import { UpdateCharacterTokenHandler as AccessorUpdateCharacterTokenHandler } fr
 import {
   StoreCharacterRequest,
   LoadRosterRequest,
+  LoadRosterSummaryRequest,
   UpdateCharacterHpRequest,
   UpdateCharacterConditionsRequest,
   UpdateDeathSavesRequest as AccessorUpdateDeathSavesRequest,
@@ -85,8 +87,9 @@ import { CampaignManager } from '@/managers/campaign/CampaignManager'
 import { CreateCampaignHandler } from '@/managers/campaign/handlers/CreateCampaignHandler'
 import { JoinCampaignHandler } from '@/managers/campaign/handlers/JoinCampaignHandler'
 import { GetRosterHandler } from '@/managers/campaign/handlers/GetRosterHandler'
+import { GetRosterSummaryHandler } from '@/managers/campaign/handlers/GetRosterSummaryHandler'
 import { ValidateDmPinHandler } from '@/managers/campaign/handlers/ValidateDmPinHandler'
-import { CreateCampaignRequest, JoinCampaignRequest, GetRosterRequest, ValidateDmPinRequest } from '@/managers/campaign/CampaignRequests'
+import { CreateCampaignRequest, JoinCampaignRequest, GetRosterRequest, GetRosterSummaryRequest, ValidateDmPinRequest } from '@/managers/campaign/CampaignRequests'
 
 // Managers — Character
 import { CharacterManager } from '@/managers/character/CharacterManager'
@@ -394,6 +397,7 @@ export function createContainer(): Container {
       .build(),
     new HandlerResolverBuilder()
       .register(LoadRosterRequest, new LoadRosterHandler(db))
+      .register(LoadRosterSummaryRequest, new LoadRosterSummaryHandler(db))
       .register(LoadCharacterRequest, new LoadCharacterHandler(db))
       .build(),
   )
@@ -459,6 +463,7 @@ export function createContainer(): Container {
       .build(),
     new HandlerResolverBuilder()
       .register(GetRosterRequest, new GetRosterHandler(characterAccessor))
+      .register(GetRosterSummaryRequest, new GetRosterSummaryHandler(characterAccessor))
       .register(ValidateDmPinRequest, new ValidateDmPinHandler(campaignAccessor))
       .build(),
   )
