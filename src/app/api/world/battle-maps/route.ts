@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
 import { createServiceClient } from '@/lib/supabase/server'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { GetBattleMapsRequest, AddBattleMapRequest } from '@/managers/world/WorldRequests'
 import type { GetBattleMapsResponse, BattleMapResponse } from '@/managers/world/WorldResponses'
 import type { MapType, MapViewport } from '@/types'
@@ -36,15 +37,20 @@ export async function POST(request: Request) {
   const campaignId = formData.get('campaignId')
   const name = formData.get('name')
   const type = formData.get('type')
+  const dmPin = formData.get('dmPin')
 
   if (
     !(file instanceof File) ||
     typeof campaignId !== 'string' ||
     typeof name !== 'string' ||
     typeof type !== 'string' ||
+    typeof dmPin !== 'string' ||
     !MAP_TYPES.includes(type as MapType)
   ) {
     return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForCampaign(campaignId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const ext = file.name.split('.').pop() ?? 'jpg'

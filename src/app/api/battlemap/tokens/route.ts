@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { GetTokensRequest, AddTokenRequest } from '@/managers/battlemap/BattleMapRequests'
 import type { TokensResponse, TokenResponse } from '@/managers/battlemap/BattleMapResponses'
 import type { TokenKind } from '@/types'
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
   if (!isAddTokenBody(body)) {
     return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
   }
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { battleMapManager } = createContainer()
   const result = (await battleMapManager.execute(
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
 function isAddTokenBody(value: unknown): value is {
   campaignId: string; battleMapId: string; kind: TokenKind; characterId?: string | null
   name: string; baseName: string; libraryKey?: string | null; imageUrl?: string | null
-  storagePath?: string | null; color: string; x: number; y: number
+  storagePath?: string | null; color: string; x: number; y: number; dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
@@ -54,6 +58,7 @@ function isAddTokenBody(value: unknown): value is {
     typeof v.baseName === 'string' &&
     typeof v.color === 'string' &&
     typeof v.x === 'number' &&
-    typeof v.y === 'number'
+    typeof v.y === 'number' &&
+    typeof v.dmPin === 'string'
   )
 }

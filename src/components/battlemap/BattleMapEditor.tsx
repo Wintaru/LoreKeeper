@@ -22,6 +22,15 @@ type HistoryEntry = {
   backward: () => Promise<void>
 }
 
+// Mirrors the helper in src/app/dm/campaign/[code]/page.tsx — this editor is
+// DM-only and every battlemap mutation route now requires the DM PIN.
+function getDmPin(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const match = window.location.pathname.match(/\/dm\/campaign\/([^/]+)/)
+  if (!match) return undefined
+  return sessionStorage.getItem(`dm_pin_${match[1].toUpperCase()}`) ?? undefined
+}
+
 function rollExpr(count: number, sides: number, mod: number): number {
   let total = mod
   for (let i = 0; i < count; i++) total += Math.floor(Math.random() * sides) + 1
@@ -94,9 +103,9 @@ export function BattleMapEditor({
     const [tRes, fRes, sRes, aRes, lRes] = await Promise.all([
       fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}`).then(r => r.json()),
       fetch(`/api/battlemap/fog?battleMapId=${battleMap.id}`).then(r => r.json()),
-      fetch(`/api/battlemap/scale?battleMapId=${battleMap.id}`).then(r => r.json()),
+      fetch(`/api/battlemap/scale?battleMapId=${battleMap.id}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`).then(r => r.json()),
       fetch(`/api/battlemap/annotations?battleMapId=${battleMap.id}`).then(r => r.json()),
-      fetch(`/api/battlemap/library?campaignId=${campaignId}`).then(r => r.json()),
+      fetch(`/api/battlemap/library?campaignId=${campaignId}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`).then(r => r.json()),
     ])
     if (Array.isArray(tRes.tokens)) setTokens(tRes.tokens)
     if (fRes.fog) setFogStrokes(fRes.fog.strokes)
@@ -181,7 +190,7 @@ export function BattleMapEditor({
 
   async function patchToken(id: string, patch: Record<string, unknown>) {
     const res = await fetch(`/api/battlemap/tokens/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...patch, dmPin: getDmPin() }),
     })
     const data = await res.json()
     if (data.token) setTokens(prev => prev.map(t => t.id === id ? data.token : t))
@@ -195,7 +204,7 @@ export function BattleMapEditor({
   }): Promise<BattleToken | null> {
     const res = await fetch('/api/battlemap/tokens', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, battleMapId: battleMap.id, ...payload }),
+      body: JSON.stringify({ campaignId, battleMapId: battleMap.id, ...payload, dmPin: getDmPin() }),
     })
     const data = await res.json()
     if (data.token) {
@@ -206,7 +215,7 @@ export function BattleMapEditor({
   }
 
   async function deleteTokenRaw(id: string) {
-    await fetch(`/api/battlemap/tokens/${id}`, { method: 'DELETE' })
+    await fetch(`/api/battlemap/tokens/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     setTokens(prev => prev.filter(t => t.id !== id))
   }
 
@@ -327,12 +336,12 @@ export function BattleMapEditor({
       setFogStrokes(after)
       await fetch('/api/battlemap/fog', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ battleMapId: battleMap.id, strokes: after }),
+        body: JSON.stringify({ battleMapId: battleMap.id, strokes: after, dmPin: getDmPin() }),
       })
       pushHistory({
         label: stroke.tool === 'paint' ? 'Paint fog' : 'Erase fog',
-        forward: async () => { setFogStrokes(after); await fetch('/api/battlemap/fog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ battleMapId: battleMap.id, strokes: after }) }) },
-        backward: async () => { setFogStrokes(before); await fetch('/api/battlemap/fog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ battleMapId: battleMap.id, strokes: before }) }) },
+        forward: async () => { setFogStrokes(after); await fetch('/api/battlemap/fog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ battleMapId: battleMap.id, strokes: after, dmPin: getDmPin() }) }) },
+        backward: async () => { setFogStrokes(before); await fetch('/api/battlemap/fog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ battleMapId: battleMap.id, strokes: before, dmPin: getDmPin() }) }) },
       })
       return
     }
@@ -343,7 +352,7 @@ export function BattleMapEditor({
       if (points.length < 2) return
       const res = await fetch('/api/battlemap/annotations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ battleMapId: battleMap.id, kind: 'pencil', data: { points, color: '#facc15' } }),
+        body: JSON.stringify({ battleMapId: battleMap.id, kind: 'pencil', data: { points, color: '#facc15' }, dmPin: getDmPin() }),
       })
       const data = await res.json()
       if (data.annotation) {
@@ -352,7 +361,7 @@ export function BattleMapEditor({
         pushHistory({
           label: 'Pencil mark',
           forward: async () => { /* re-adding recreates with new id; acceptable */ },
-          backward: async () => { await fetch(`/api/battlemap/annotations/${id}`, { method: 'DELETE' }); setAnnotations(prev => prev.filter(a => a.id !== id)) },
+          backward: async () => { await fetch(`/api/battlemap/annotations/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' }); setAnnotations(prev => prev.filter(a => a.id !== id)) },
         })
       }
       return
@@ -363,7 +372,7 @@ export function BattleMapEditor({
       if (Math.hypot(draft.tx - draft.ox, draft.ty - draft.oy) < 0.01) return
       const res = await fetch('/api/battlemap/annotations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ battleMapId: battleMap.id, kind: 'aoe', data: { shape: aoeShape, originX: draft.ox, originY: draft.oy, targetX: draft.tx, targetY: draft.ty, color: '#f97316' } }),
+        body: JSON.stringify({ battleMapId: battleMap.id, kind: 'aoe', data: { shape: aoeShape, originX: draft.ox, originY: draft.oy, targetX: draft.tx, targetY: draft.ty, color: '#f97316' }, dmPin: getDmPin() }),
       })
       const data = await res.json()
       if (data.annotation) {
@@ -372,7 +381,7 @@ export function BattleMapEditor({
         pushHistory({
           label: 'AoE template',
           forward: async () => {},
-          backward: async () => { await fetch(`/api/battlemap/annotations/${id}`, { method: 'DELETE' }); setAnnotations(prev => prev.filter(a => a.id !== id)) },
+          backward: async () => { await fetch(`/api/battlemap/annotations/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' }); setAnnotations(prev => prev.filter(a => a.id !== id)) },
         })
       }
       return
@@ -393,7 +402,7 @@ export function BattleMapEditor({
     setFeetPerUnit(newFeetPerUnit)
     void fetch('/api/battlemap/scale', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ battleMapId: battleMap.id, feetPerUnit: newFeetPerUnit }),
+      body: JSON.stringify({ battleMapId: battleMap.id, feetPerUnit: newFeetPerUnit, dmPin: getDmPin() }),
     })
     setScaleCalibrating(false)
     setScaleDraft(null)
@@ -524,6 +533,7 @@ export function BattleMapEditor({
     fd.append('campaignId', campaignId)
     fd.append('name', uploadName.trim())
     fd.append('color', uploadColor)
+    fd.append('dmPin', getDmPin() ?? '')
     const res = await fetch('/api/battlemap/library', { method: 'POST', body: fd })
     const data = await res.json()
     if (data.entry) setLibrary(prev => [...prev, data.entry])
@@ -532,7 +542,7 @@ export function BattleMapEditor({
   }
 
   async function deleteLibraryEntry(entry: BattleTokenLibraryEntry) {
-    await fetch(`/api/battlemap/library/${entry.id}?storagePath=${encodeURIComponent(entry.storagePath)}`, { method: 'DELETE' })
+    await fetch(`/api/battlemap/library/${entry.id}?storagePath=${encodeURIComponent(entry.storagePath)}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     setLibrary(prev => prev.filter(e => e.id !== entry.id))
   }
 
@@ -802,7 +812,7 @@ export function BattleMapEditor({
               onSubmit={async text => {
                 const res = await fetch('/api/battlemap/annotations', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ battleMapId: battleMap.id, kind: 'text', data: { x: textPending.x, y: textPending.y, text, color: '#fbbf24' } }),
+                  body: JSON.stringify({ battleMapId: battleMap.id, kind: 'text', data: { x: textPending.x, y: textPending.y, text, color: '#fbbf24' }, dmPin: getDmPin() }),
                 })
                 const data = await res.json()
                 if (data.annotation) setAnnotations(prev => [...prev, data.annotation])

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { UpdateBattleMapAccessRequest } from '@/managers/world/WorldRequests'
 import type { DeleteResponse } from '@/managers/world/WorldResponses'
 import type { MapViewport } from '@/types'
@@ -8,6 +9,9 @@ export async function PUT(request: Request) {
   const body: unknown = await request.json()
   if (!isUpdateBattleMapAccessBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const { worldManager } = createContainer()
@@ -32,12 +36,14 @@ function isUpdateBattleMapAccessBody(value: unknown): value is {
   battleMapAccessGranted: boolean
   sharedBattleMapIds: string[]
   battleMapViewport?: MapViewport | null
+  dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
   return (
     typeof v.campaignId === 'string' &&
     typeof v.battleMapAccessGranted === 'boolean' &&
-    Array.isArray(v.sharedBattleMapIds)
+    Array.isArray(v.sharedBattleMapIds) &&
+    typeof v.dmPin === 'string'
   )
 }

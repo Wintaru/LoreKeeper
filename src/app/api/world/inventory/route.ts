@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { GetInventoryRequest, UpdateInventoryRequest } from '@/managers/world/WorldRequests'
 import type { GetInventoryResponse, DeleteResponse } from '@/managers/world/WorldResponses'
 import type { InventoryItem, CustomCurrencyEntry } from '@/types'
@@ -25,6 +26,9 @@ export async function PUT(request: Request) {
   const body: unknown = await request.json()
   if (!isUpdateInventoryBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const { worldManager } = createContainer()
@@ -53,8 +57,9 @@ function isUpdateInventoryBody(value: unknown): value is {
   copper?: number
   customCurrency?: CustomCurrencyEntry[]
   sharedItems: InventoryItem[]
+  dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.campaignId === 'string' && typeof v.gold === 'number' && Array.isArray(v.sharedItems)
+  return typeof v.campaignId === 'string' && typeof v.gold === 'number' && Array.isArray(v.sharedItems) && typeof v.dmPin === 'string'
 }

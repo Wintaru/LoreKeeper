@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForBattleMap } from '@/lib/auth/dmAuth'
 import { GetFogRequest, SetFogRequest } from '@/managers/battlemap/BattleMapRequests'
 import type { FogResponse } from '@/managers/battlemap/BattleMapResponses'
 import type { FogStroke } from '@/types'
@@ -20,6 +21,9 @@ export async function PUT(request: Request) {
   if (!isSetFogBody(body)) {
     return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
   }
+  if (!(await verifyDmPinForBattleMap(body.battleMapId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { battleMapManager } = createContainer()
   const result = (await battleMapManager.execute(
@@ -32,8 +36,8 @@ export async function PUT(request: Request) {
   return NextResponse.json({ fog: result.fog })
 }
 
-function isSetFogBody(value: unknown): value is { battleMapId: string; strokes: FogStroke[] } {
+function isSetFogBody(value: unknown): value is { battleMapId: string; strokes: FogStroke[]; dmPin: string } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.battleMapId === 'string' && Array.isArray(v.strokes)
+  return typeof v.battleMapId === 'string' && Array.isArray(v.strokes) && typeof v.dmPin === 'string'
 }

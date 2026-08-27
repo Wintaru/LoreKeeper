@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, BattleMap, MapViewport, MapType, InitiativeRequest, Quest } from '@/types'
 import { EncounterEngine } from '@/engines/encounter/EncounterEngine'
@@ -62,8 +62,27 @@ const CONDITION_ICONS: Record<string, string> = {
 }
 const STANDARD_CONDITIONS = Object.keys(CONDITION_ICONS)
 
+// The DM PIN is written to sessionStorage (keyed by campaign code) at
+// create/rejoin/import time. Every DM-only mutation route now requires it —
+// read it directly from the URL rather than prop-drilling it through every
+// tab/card component in this file.
+function getDmPin(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const match = window.location.pathname.match(/\/dm\/campaign\/([^/]+)/)
+  if (!match) return undefined
+  return sessionStorage.getItem(`dm_pin_${match[1].toUpperCase()}`) ?? undefined
+}
+
+function clearStaleDmPin(): void {
+  if (typeof window === 'undefined') return
+  const match = window.location.pathname.match(/\/dm\/campaign\/([^/]+)/)
+  if (!match) return
+  sessionStorage.removeItem(`dm_pin_${match[1].toUpperCase()}`)
+}
+
 export default function DmControlPanel() {
   const { code } = useParams<{ code: string }>()
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('roster')
   const [campaignId, setCampaignId] = useState<string | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
@@ -77,13 +96,16 @@ export default function DmControlPanel() {
   const [showShortcuts, setShowShortcuts] = useState(false)
 
   const fetchRoster = useCallback(async (cid: string) => {
-    const res = await fetch(`/api/campaigns/roster?campaignId=${cid}`)
+    const dmPin = getDmPin()
+    const res = await fetch(`/api/campaigns/roster?campaignId=${cid}&dmPin=${encodeURIComponent(dmPin ?? '')}`)
+    if (res.status === 401) { clearStaleDmPin(); router.push('/dm/rejoin'); return }
     const data: unknown = await res.json()
     if (isRosterResponse(data)) setCharacters(data.characters)
-  }, [])
+  }, [router])
 
   const fetchCombatSession = useCallback(async (cid: string) => {
-    const res = await fetch(`/api/combat/session?campaignId=${cid}`)
+    const dmPin = getDmPin()
+    const res = await fetch(`/api/combat/session?campaignId=${cid}&dmPin=${encodeURIComponent(dmPin ?? '')}`)
     const data: unknown = await res.json()
     if (isCombatSessionResponse(data)) setCombatSession(data.session)
   }, [])
@@ -96,6 +118,7 @@ export default function DmControlPanel() {
 
   useEffect(() => {
     async function init() {
+      if (!getDmPin()) { clearStaleDmPin(); router.push('/dm/rejoin'); return }
       const supabase = createClient()
       const { data } = await supabase.from('campaigns').select('id').eq('code', code.toUpperCase()).single()
       if (!data) { setLoading(false); return }
@@ -105,7 +128,7 @@ export default function DmControlPanel() {
       setLoading(false)
     }
     void init()
-  }, [code, fetchRoster, fetchCombatSession, fetchInitiativeRequest])
+  }, [code, router, fetchRoster, fetchCombatSession, fetchInitiativeRequest])
 
   useEffect(() => {
     if (monsterGroups.length === 0 || characters.length === 0) { setEncounterDifficulty(null); return }
@@ -184,7 +207,7 @@ export default function DmControlPanel() {
             title="Dice roller">🎲</button>
           {campaignId && (
             <a
-              href={`/api/campaigns/export?campaignId=${campaignId}`}
+              href={`/api/campaigns/export?campaignId=${campaignId}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`}
               className="text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-stone-700 text-stone-500 hover:text-stone-300 transition-colors"
               title="Export campaign packet (.zip)"
             >⬇</a>
@@ -340,7 +363,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     await fetch('/api/characters/stats', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass }),
+      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass, dmPin: getDmPin() }),
     })
     setShowStatEdit(false)
     onRefresh()
@@ -350,7 +373,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     await fetch('/api/characters/kick', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id }),
+      body: JSON.stringify({ characterId: c.id, dmPin: getDmPin() }),
     })
     onRefresh()
   }
@@ -361,7 +384,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     await fetch('/api/characters/xp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, xpToAdd: amount }),
+      body: JSON.stringify({ characterId: c.id, xpToAdd: amount, dmPin: getDmPin() }),
     })
     setXpInput(''); onRefresh()
   }
@@ -371,7 +394,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     const res = await fetch('/api/push/whisper', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, message: whisperText.trim() }),
+      body: JSON.stringify({ characterId: c.id, message: whisperText.trim(), dmPin: getDmPin() }),
     })
     if (res.ok) {
       setWhisperText(''); setWhisperSent(true); setWhisperError(false)
@@ -390,7 +413,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     await fetch('/api/characters/conditions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, conditions: newConditions }),
+      body: JSON.stringify({ characterId: c.id, conditions: newConditions, dmPin: getDmPin() }),
     })
     onRefresh()
   }
@@ -715,7 +738,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
       const res = await fetch('/api/initiative/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify({ campaignId, dmPin: getDmPin() }),
       })
       const data: unknown = await res.json()
       if (isInitiativeRequestApiResponse(data)) onInitiativeRequestChange(data.request)
@@ -725,7 +748,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
   }
 
   async function handleCancelInitiativeRequest() {
-    await fetch(`/api/initiative/request?campaignId=${campaignId}`, { method: 'DELETE' })
+    await fetch(`/api/initiative/request?campaignId=${campaignId}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     onInitiativeRequestChange(null)
   }
 
@@ -743,10 +766,10 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
         fetch('/api/combat/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ campaignId, initiativeOrder: order }),
+          body: JSON.stringify({ campaignId, initiativeOrder: order, dmPin: getDmPin() }),
         }),
         initiativeRequest
-          ? fetch(`/api/initiative/request?campaignId=${campaignId}`, { method: 'DELETE' })
+          ? fetch(`/api/initiative/request?campaignId=${campaignId}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
           : Promise.resolve(new Response()),
       ])
       const data: unknown = await combatRes.json()
@@ -763,7 +786,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
       await fetch('/api/combat/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify({ campaignId, dmPin: getDmPin() }),
       })
       onSessionChange(null)
       setSelectedCharId(null)
@@ -784,6 +807,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
           currentTurnIndex: session.currentTurnIndex,
           initiativeOrderLength: session.initiativeOrder.length,
           roundNumber: session.roundNumber,
+          dmPin: getDmPin(),
         }),
       })
       const data: unknown = await res.json()
@@ -809,7 +833,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
     await fetch('/api/characters/hp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId, newHp }),
+      body: JSON.stringify({ characterId, newHp, dmPin: getDmPin() }),
     })
     setHpInput('')
     onRosterRefresh()
@@ -822,7 +846,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
     await fetch('/api/characters/conditions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId, conditions: newConditions }),
+      body: JSON.stringify({ characterId, conditions: newConditions, dmPin: getDmPin() }),
     })
     setConditionName('')
     setConditionRounds('')
@@ -835,7 +859,7 @@ function CombatTab({ campaignId, characters, session, onSessionChange, onRosterR
     await fetch('/api/characters/conditions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId, conditions: newConditions }),
+      body: JSON.stringify({ characterId, conditions: newConditions, dmPin: getDmPin() }),
     })
     onRosterRefresh()
   }
@@ -1247,7 +1271,7 @@ function FateTab({ campaignId, characters }: { campaignId: string; characters: C
       const res = await fetch('/api/fate/draw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId, eventType, excludedCharacterIds: Array.from(excluded), dangerWeighted }),
+        body: JSON.stringify({ campaignId, eventType, excludedCharacterIds: Array.from(excluded), dangerWeighted, dmPin: getDmPin() }),
       })
       const data: unknown = await res.json()
       if (!res.ok || !isDrawResponse(data)) return
@@ -1266,7 +1290,7 @@ function FateTab({ campaignId, characters }: { campaignId: string; characters: C
       await fetch('/api/fate/reveal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fateEventId: pendingEvent.id }),
+        body: JSON.stringify({ fateEventId: pendingEvent.id, dmPin: getDmPin() }),
       })
       setRevealedTarget(characters.find(c => c.id === pendingEvent.targetCharacterId) ?? null)
       setFateState('revealed')
@@ -1522,7 +1546,7 @@ function NpcsSection({ campaignId, characters, npcs, onRefresh }: {
     await fetch('/api/world/npcs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, name: form.name.trim(), faction: form.faction || null, lastLocation: form.lastLocation || null, notes: form.notes || null, relationships }),
+      body: JSON.stringify({ campaignId, name: form.name.trim(), faction: form.faction || null, lastLocation: form.lastLocation || null, notes: form.notes || null, relationships, dmPin: getDmPin() }),
     })
     resetForm(); setShowForm(false); onRefresh()
   }
@@ -1534,13 +1558,13 @@ function NpcsSection({ campaignId, characters, npcs, onRefresh }: {
     await fetch(`/api/world/npcs/${npc.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: form.name.trim(), faction: form.faction || null, lastLocation: form.lastLocation || null, notes: form.notes || null, relationships }),
+      body: JSON.stringify({ name: form.name.trim(), faction: form.faction || null, lastLocation: form.lastLocation || null, notes: form.notes || null, relationships, dmPin: getDmPin() }),
     })
     setEditingId(null); onRefresh()
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/world/npcs/${id}`, { method: 'DELETE' })
+    await fetch(`/api/world/npcs/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     if (expandedId === id) setExpandedId(null)
     onRefresh()
   }
@@ -1681,7 +1705,7 @@ function LocationsSection({ campaignId, locations, onRefresh }: {
     await fetch('/api/world/locations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, name: newName.trim() }),
+      body: JSON.stringify({ campaignId, name: newName.trim(), dmPin: getDmPin() }),
     })
     setNewName(''); onRefresh()
   }
@@ -1690,7 +1714,7 @@ function LocationsSection({ campaignId, locations, onRefresh }: {
     await fetch(`/api/world/locations/${loc.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visited: !loc.visited, notes: loc.notes }),
+      body: JSON.stringify({ visited: !loc.visited, notes: loc.notes, dmPin: getDmPin() }),
     })
     onRefresh()
   }
@@ -1699,13 +1723,13 @@ function LocationsSection({ campaignId, locations, onRefresh }: {
     await fetch(`/api/world/locations/${loc.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visited: loc.visited, notes: editingNotes[loc.id] ?? loc.notes ?? '' }),
+      body: JSON.stringify({ visited: loc.visited, notes: editingNotes[loc.id] ?? loc.notes ?? '', dmPin: getDmPin() }),
     })
     onRefresh()
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/world/locations/${id}`, { method: 'DELETE' })
+    await fetch(`/api/world/locations/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     onRefresh()
   }
 
@@ -1829,6 +1853,7 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
         copper: overrides.copper ?? copper,
         customCurrency: overrides.customCurrency ?? customCurrency,
         sharedItems,
+        dmPin: getDmPin(),
       }),
     })
     onRefresh()
@@ -1849,7 +1874,7 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
     await fetch('/api/world/inventory', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, gold, silver, copper, customCurrency, sharedItems: [...sharedItems, item] }),
+      body: JSON.stringify({ campaignId, gold, silver, copper, customCurrency, sharedItems: [...sharedItems, item], dmPin: getDmPin() }),
     })
     setNewItem({ name: '', quantity: '1', notes: '' }); setShowItemForm(false); onRefresh()
   }
@@ -1859,7 +1884,7 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
     await fetch('/api/world/inventory', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, gold, silver, copper, customCurrency, sharedItems: updated }),
+      body: JSON.stringify({ campaignId, gold, silver, copper, customCurrency, sharedItems: updated, dmPin: getDmPin() }),
     })
     onRefresh()
   }
@@ -1871,7 +1896,7 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
     await fetch('/api/world/character-loot', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: char.id, loot: [...char.loot, item] }),
+      body: JSON.stringify({ characterId: char.id, loot: [...char.loot, item], dmPin: getDmPin() }),
     })
     setLootInputs(p => ({ ...p, [char.id]: { name: '', quantity: '1' } })); onRefresh()
   }
@@ -1881,7 +1906,7 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
     await fetch('/api/world/character-loot', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: char.id, loot: updated }),
+      body: JSON.stringify({ characterId: char.id, loot: updated, dmPin: getDmPin() }),
     })
     onRefresh()
   }
@@ -2093,13 +2118,13 @@ function SessionLogSection({ campaignId, notes, onRefresh }: {
     await fetch('/api/world/session-notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, note: noteText.trim() }),
+      body: JSON.stringify({ campaignId, note: noteText.trim(), dmPin: getDmPin() }),
     })
     setNoteText(''); onRefresh()
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/world/session-notes/${id}`, { method: 'DELETE' })
+    await fetch(`/api/world/session-notes/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     onRefresh()
   }
 
@@ -2318,6 +2343,7 @@ function QuestGenerator({ campaignId, onQuestSaved }: { campaignId: string; onQu
         difficulty: q.difficulty,
         questType: q.type,
         isOptional: q.isOptional,
+        dmPin: getDmPin(),
       }),
     })
     updateField(idx, 'saving', false)
@@ -2488,7 +2514,7 @@ function QuestsSection({ campaignId, quests, onRefresh }: { campaignId: string; 
     const res = await fetch('/api/world/quests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, ...form, title: form.title.trim() }),
+      body: JSON.stringify({ campaignId, ...form, title: form.title.trim(), dmPin: getDmPin() }),
     })
     if (res.ok) { setForm(emptyForm); setShowForm(false); onRefresh() }
   }
@@ -2500,6 +2526,7 @@ function QuestsSection({ campaignId, quests, onRefresh }: { campaignId: string; 
       body: JSON.stringify({
         questId: q.id, ...form, title: form.title.trim(),
         isPublic: q.isPublic, status: q.status,
+        dmPin: getDmPin(),
       }),
     })
     setEditingId(null); onRefresh()
@@ -2515,13 +2542,14 @@ function QuestsSection({ campaignId, quests, onRefresh }: { campaignId: string; 
         reward: q.reward, difficulty: q.difficulty, questType: q.questType,
         isOptional: q.isOptional, isPublic: !q.isPublic,
         status: !q.isPublic ? 'active' : 'draft',
+        dmPin: getDmPin(),
       }),
     })
     onRefresh()
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/world/quests?questId=${id}`, { method: 'DELETE' })
+    await fetch(`/api/world/quests?questId=${id}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     onRefresh()
   }
 
@@ -2726,7 +2754,7 @@ function TablesSection({ campaignId, onQuestSaved }: { campaignId: string; onQue
     await fetch('/api/world/tables', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, name: newName.trim(), entries }),
+      body: JSON.stringify({ campaignId, name: newName.trim(), entries, dmPin: getDmPin() }),
     })
     setNewName(''); setNewEntries(''); setShowNewForm(false); void fetchTables()
   }
@@ -2736,13 +2764,13 @@ function TablesSection({ campaignId, onQuestSaved }: { campaignId: string; onQue
     await fetch(`/api/world/tables/${t.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName.trim(), entries }),
+      body: JSON.stringify({ name: editName.trim(), entries, dmPin: getDmPin() }),
     })
     setEditingId(null); void fetchTables()
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/world/tables/${id}`, { method: 'DELETE' })
+    await fetch(`/api/world/tables/${id}?dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     void fetchTables()
   }
 
@@ -3337,13 +3365,14 @@ function MapsTab({ campaignId }: { campaignId: string }) {
     fd.append('campaignId', campaignId)
     fd.append('name', uploadName.trim())
     fd.append('type', uploadType)
+    fd.append('dmPin', getDmPin() ?? '')
     await fetch('/api/world/maps', { method: 'POST', body: fd })
     setUploadFile(null); setUploadName(''); setUploading(false)
     void loadMaps()
   }
 
   async function handleDelete(map: CampaignMap) {
-    await fetch(`/api/world/maps/${map.id}?storagePath=${encodeURIComponent(map.storagePath)}`, { method: 'DELETE' })
+    await fetch(`/api/world/maps/${map.id}?storagePath=${encodeURIComponent(map.storagePath)}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     const newShared = sharedMapIds.filter(id => id !== map.id)
     const newViewport = mapViewport?.mapId === map.id ? null : mapViewport
     await saveAccess(mapAccessGranted, newShared, newViewport)
@@ -3368,7 +3397,7 @@ function MapsTab({ campaignId }: { campaignId: string }) {
     await fetch('/api/world/maps/access', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, mapAccessGranted: granted, sharedMapIds: shared, mapViewport: viewport }),
+      body: JSON.stringify({ campaignId, mapAccessGranted: granted, sharedMapIds: shared, mapViewport: viewport, dmPin: getDmPin() }),
     })
   }
 
@@ -3566,13 +3595,14 @@ function BattleMapsTab({ campaignId, characters }: { campaignId: string; charact
     fd.append('campaignId', campaignId)
     fd.append('name', uploadName.trim())
     fd.append('type', uploadType)
+    fd.append('dmPin', getDmPin() ?? '')
     await fetch('/api/world/battle-maps', { method: 'POST', body: fd })
     setUploadFile(null); setUploadName(''); setUploading(false)
     void loadMaps()
   }
 
   async function handleDelete(map: BattleMap) {
-    await fetch(`/api/world/battle-maps/${map.id}?storagePath=${encodeURIComponent(map.storagePath)}`, { method: 'DELETE' })
+    await fetch(`/api/world/battle-maps/${map.id}?storagePath=${encodeURIComponent(map.storagePath)}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`, { method: 'DELETE' })
     const newShared = sharedMapIds.filter(id => id !== map.id)
     const newViewport = mapViewport?.mapId === map.id ? null : mapViewport
     await saveAccess(mapAccessGranted, newShared, newViewport)
@@ -3597,7 +3627,7 @@ function BattleMapsTab({ campaignId, characters }: { campaignId: string; charact
     await fetch('/api/world/battle-maps/access', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, battleMapAccessGranted: granted, sharedBattleMapIds: shared, battleMapViewport: viewport }),
+      body: JSON.stringify({ campaignId, battleMapAccessGranted: granted, sharedBattleMapIds: shared, battleMapViewport: viewport, dmPin: getDmPin() }),
     })
   }
 

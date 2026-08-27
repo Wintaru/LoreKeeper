@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
 import { UpdateCharacterCurrencyRequest } from '@/managers/character/CharacterRequests'
 import type { CustomCurrencyEntry } from '@/types'
+import { verifyDmPinForCharacter } from '@/lib/auth/dmAuth'
 
 export async function PUT(request: Request) {
   const body: unknown = await request.json()
   if (!isUpdateCurrencyBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForCharacter(body.characterId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const { characterManager } = createContainer()
@@ -33,8 +37,9 @@ function isUpdateCurrencyBody(value: unknown): value is {
   silver?: number
   copper?: number
   customCurrency?: CustomCurrencyEntry[]
+  dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.characterId === 'string'
+  return typeof v.characterId === 'string' && typeof v.dmPin === 'string'
 }

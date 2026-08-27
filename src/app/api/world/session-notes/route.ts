@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { GetSessionNotesRequest, AddSessionNoteRequest } from '@/managers/world/WorldRequests'
 import type { GetSessionNotesResponse, SessionNoteResponse } from '@/managers/world/WorldResponses'
 
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
   if (!isAddNoteBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { worldManager } = createContainer()
   const result = (await worldManager.execute(
@@ -32,8 +36,8 @@ export async function POST(request: Request) {
   return NextResponse.json({ note: result.note }, { status: 201 })
 }
 
-function isAddNoteBody(value: unknown): value is { campaignId: string; note: string } {
+function isAddNoteBody(value: unknown): value is { campaignId: string; note: string; dmPin: string } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.campaignId === 'string' && typeof v.note === 'string'
+  return typeof v.campaignId === 'string' && typeof v.note === 'string' && typeof v.dmPin === 'string'
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForCampaign, verifyDmPinForQuest } from '@/lib/auth/dmAuth'
 import { AddQuestRequest, EditQuestRequest, DeleteQuestRequest, GetQuestsRequest } from '@/managers/world/WorldRequests'
 import type { QuestResponse, GetQuestsResponse } from '@/managers/world/WorldResponses'
 import type { QuestStatus } from '@/types'
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
   if (!isAddQuestBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
   const { worldManager } = createContainer()
   const result = (await worldManager.execute(new AddQuestRequest(
     body.campaignId, body.title, body.description ?? null, body.giver ?? null,
@@ -39,6 +43,9 @@ export async function PUT(request: Request) {
   if (!isEditQuestBody(body)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!(await verifyDmPinForQuest(body.questId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
   const { worldManager } = createContainer()
   const result = (await worldManager.execute(new EditQuestRequest(
     body.questId, body.title, body.description ?? null, body.giver ?? null,
@@ -56,7 +63,11 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const questId = searchParams.get('questId')
+  const dmPin = searchParams.get('dmPin') ?? undefined
   if (!questId) return NextResponse.json({ error: 'questId is required' }, { status: 400 })
+  if (!(await verifyDmPinForQuest(questId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { worldManager } = createContainer()
   await worldManager.execute(new DeleteQuestRequest(questId))
@@ -75,10 +86,11 @@ function isAddQuestBody(value: unknown): value is {
   difficulty?: number
   questType?: string | null
   isOptional?: boolean
+  dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.campaignId === 'string' && typeof v.title === 'string'
+  return typeof v.campaignId === 'string' && typeof v.title === 'string' && typeof v.dmPin === 'string'
 }
 
 function isEditQuestBody(value: unknown): value is {
@@ -95,8 +107,9 @@ function isEditQuestBody(value: unknown): value is {
   isOptional?: boolean
   isPublic?: boolean
   status?: QuestStatus
+  dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.questId === 'string' && typeof v.title === 'string'
+  return typeof v.questId === 'string' && typeof v.title === 'string' && typeof v.dmPin === 'string'
 }

@@ -10,6 +10,7 @@ import type {
   GetInitiativeRequestResponse,
   ResolveInitiativeResponse,
 } from '@/managers/combat/CombatResponses'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body: unknown = await request.json()
   if (!isCampaignBody(body)) return NextResponse.json({ error: 'Missing campaignId' }, { status: 400 })
+  if (!(await verifyDmPinForCampaign(body.campaignId, body.dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { combatManager } = createContainer()
   const result = (await combatManager.execute(
@@ -40,7 +44,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const campaignId = searchParams.get('campaignId')
+  const dmPin = searchParams.get('dmPin') ?? undefined
   if (!campaignId) return NextResponse.json({ error: 'Missing campaignId' }, { status: 400 })
+  if (!(await verifyDmPinForCampaign(campaignId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { combatManager } = createContainer()
   const result = (await combatManager.execute(
@@ -51,7 +59,8 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ ok: true })
 }
 
-function isCampaignBody(value: unknown): value is { campaignId: string } {
+function isCampaignBody(value: unknown): value is { campaignId: string; dmPin: string } {
   if (typeof value !== 'object' || value === null) return false
-  return typeof (value as Record<string, unknown>).campaignId === 'string'
+  const v = value as Record<string, unknown>
+  return typeof v.campaignId === 'string' && typeof v.dmPin === 'string'
 }

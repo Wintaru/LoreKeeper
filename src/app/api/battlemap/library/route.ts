@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
 import { createServiceClient } from '@/lib/supabase/server'
+import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
 import { GetLibraryRequest, AddLibraryEntryRequest } from '@/managers/battlemap/BattleMapRequests'
 import type { LibraryResponse, LibraryEntryResponse } from '@/managers/battlemap/BattleMapResponses'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const campaignId = searchParams.get('campaignId')
+  const dmPin = searchParams.get('dmPin') ?? undefined
   if (!campaignId) return NextResponse.json({ error: 'campaignId is required' }, { status: 400 })
+  if (!(await verifyDmPinForCampaign(campaignId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { battleMapManager } = createContainer()
   const result = (await battleMapManager.query(new GetLibraryRequest(campaignId))) as LibraryResponse
@@ -21,15 +26,20 @@ export async function POST(request: Request) {
   const campaignId = formData.get('campaignId')
   const name = formData.get('name')
   const color = formData.get('color')
+  const dmPin = formData.get('dmPin')
 
   if (
     !(file instanceof File) ||
     typeof campaignId !== 'string' ||
     typeof name !== 'string' ||
     typeof color !== 'string' ||
+    typeof dmPin !== 'string' ||
     !name.trim()
   ) {
     return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForCampaign(campaignId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const ext = file.name.split('.').pop() ?? 'jpg'

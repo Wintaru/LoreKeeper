@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
+import { verifyDmPinForBattleMap } from '@/lib/auth/dmAuth'
 import { DeleteBattleMapRequest } from '@/managers/world/WorldRequests'
 import type { DeleteResponse } from '@/managers/world/WorldResponses'
 
@@ -10,9 +11,13 @@ export async function DELETE(
   const { mapId } = await params
   const { searchParams } = new URL(request.url)
   const storagePath = searchParams.get('storagePath')
+  const dmPin = searchParams.get('dmPin') ?? undefined
 
   if (!storagePath) {
     return NextResponse.json({ error: 'storagePath is required' }, { status: 400 })
+  }
+  if (!(await verifyDmPinForBattleMap(mapId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
   }
 
   const { worldManager } = createContainer()
