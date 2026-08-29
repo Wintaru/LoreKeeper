@@ -21,6 +21,7 @@ export class UpdateCharacterClassesHandler implements IHandler {
         max_hp: req.maxHp,
         current_hp: req.currentHp,
         spell_slots: req.spellSlots,
+        ...(req.xp !== undefined ? { xp: req.xp } : {}),
       })
       .eq('id', req.characterId)
 

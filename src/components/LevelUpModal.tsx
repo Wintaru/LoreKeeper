@@ -69,9 +69,14 @@ export function LevelUpModal({
     [...previousCasting.spellSlots, ...previousCasting.pactSlots]
       .map(s => `${s.kind ?? 'spell'}-${s.level}`)
   )
-  const newlyUnlocked = newSlots
-    .filter(s => !previousLevels.has(`${s.kind ?? 'spell'}-${s.level}`))
-    .map(s => s.level)
+  // A spell slot and a pact slot can newly unlock at the same numeric level
+  // (e.g. adding both a 1st-level spellcasting class and Warlock at once) —
+  // dedupe by level since the pill below doesn't distinguish kind.
+  const newlyUnlocked = Array.from(new Set(
+    newSlots
+      .filter(s => !previousLevels.has(`${s.kind ?? 'spell'}-${s.level}`))
+      .map(s => s.level)
+  ))
 
   const isCaster = newSlots.length > 0
   const isMulticlass = classes.length > 1

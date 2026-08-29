@@ -80,6 +80,11 @@ export class UpdateCharacterClassesRequest extends RequestBase {
     public readonly maxHp: number,
     public readonly currentHp: number,
     public readonly spellSlots: SpellSlot[],
+    // Set only when XP must land in the same write as the class change (the
+    // automatic single-class level-up path) — otherwise a second, separate
+    // UpdateXpRequest could succeed or fail independently of this one and
+    // leave xp and level out of sync.
+    public readonly xp?: number,
   ) { super() }
 }
 

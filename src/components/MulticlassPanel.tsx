@@ -41,6 +41,7 @@ export function MulticlassPanel({
 
   const [open, setOpen] = useState(false)
   const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.name ?? '')
+  const [subclassInput, setSubclassInput] = useState('')
   const [hpGainInput, setHpGainInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,10 +63,14 @@ export function MulticlassPanel({
     [classes, selectedClass, c.abilityScores],
   )
 
-  const projectedClasses = useMemo(
-    () => addClassLevel(classes, selectedClass, 1),
-    [classes, selectedClass],
-  )
+  const projectedClasses = useMemo(() => {
+    const leveled = addClassLevel(classes, selectedClass, 1)
+    if (!subclassInput.trim()) return leveled
+    const key = selectedClass.toLowerCase().trim()
+    return leveled.map(entry =>
+      entry.name.toLowerCase().trim() === key ? { ...entry, subclass: subclassInput.trim() } : entry
+    )
+  }, [classes, selectedClass, subclassInput])
   const currentCasting = useMemo(() => calculateSpellcasting(classes), [classes])
   const projectedCasting = useMemo(() => calculateSpellcasting(projectedClasses), [projectedClasses])
 
@@ -82,7 +87,11 @@ export function MulticlassPanel({
     const res = await fetch('/api/characters/classes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, className: selectedClass, hpGain, dmPin }),
+      body: JSON.stringify({
+        characterId: c.id, className: selectedClass, hpGain,
+        subclass: subclassInput.trim() || null,
+        dmPin,
+      }),
     })
     setBusy(false)
     if (!res.ok) {
@@ -92,6 +101,7 @@ export function MulticlassPanel({
     }
     setUndoSnapshot(snapshot)
     setHpGainInput('')
+    setSubclassInput('')
     onRefresh()
   }
 
@@ -119,7 +129,25 @@ export function MulticlassPanel({
     onRefresh()
   }
 
-  const classOptions = Array.from(new Set([...classes.map(e => e.name), ...ALL_CLASSES]))
+  // Case-insensitive merge: a class already on the sheet must not appear a
+  // second time just because it was stored with different casing than its
+  // ALL_CLASSES entry (e.g. a character created with "fighter").
+  const classOptions = (() => {
+    const seen = new Set<string>()
+    const options: string[] = []
+    for (const name of [...classes.map(e => e.name), ...ALL_CLASSES]) {
+      const key = name.toLowerCase().trim()
+      if (seen.has(key)) continue
+      seen.add(key)
+      options.push(name)
+    }
+    return options
+  })()
+
+  // Only Fighter and Rogue have a third-caster subclass (Eldritch Knight,
+  // Arcane Trickster) — offering the field for every class would just invite
+  // typos that silently do nothing.
+  const canPickThirdCasterSubclass = ['fighter', 'rogue'].includes(selectedClass.toLowerCase().trim())
 
   return (
     <div className="border-t border-stone-800/50 pt-3 space-y-2">
@@ -172,7 +200,7 @@ export function MulticlassPanel({
               <div className="flex gap-2">
                 <select
                   value={selectedClass}
-                  onChange={e => { setSelectedClass(e.target.value); setHpGainInput('') }}
+                  onChange={e => { setSelectedClass(e.target.value); setHpGainInput(''); setSubclassInput('') }}
                   className="flex-1 bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-violet-500"
                 >
                   {classOptions.map(name => {
@@ -201,6 +229,21 @@ export function MulticlassPanel({
                   ? ` ${conMod >= 0 ? '+' : '−'} ${Math.abs(conMod)} CON = +${suggestedHp} HP`
                   : ' (no CON score on file — add ability scores for an exact figure)'}
               </p>
+
+              {canPickThirdCasterSubclass && (
+                <div>
+                  <label className="text-[0.65rem] text-stone-600">
+                    Subclass (set to &quot;Eldritch Knight&quot; or &quot;Arcane Trickster&quot; for bonus spell slots)
+                  </label>
+                  <input
+                    type="text"
+                    value={subclassInput}
+                    onChange={e => setSubclassInput(e.target.value)}
+                    placeholder="Optional"
+                    className="mt-1 w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+              )}
 
               {/* Prerequisites — advisory, never blocking */}
               {isNewClass && (

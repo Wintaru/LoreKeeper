@@ -25,6 +25,8 @@ export async function persistClasses(
     classes: ClassLevel[]
     maxHp: number
     currentHp: number
+    /** Set only when XP must be written atomically with the class change (see UpdateCharacterClassesRequest). */
+    xp?: number
   },
 ): Promise<UpdateCharacterClassesResponse> {
   const classes = args.classes.filter(c => c.level > 0)
@@ -45,7 +47,7 @@ export async function persistClasses(
   )) as CalculateSpellSlotsResponse
 
   const maxHp = Math.max(1, args.maxHp)
-  const currentHp = Math.min(args.currentHp, maxHp)
+  const currentHp = Math.min(Math.max(0, args.currentHp), maxHp)
   const derivedPrimaryClass = primaryClass(classes)
 
   const stored = await characterAccessor.store(
@@ -57,6 +59,7 @@ export async function persistClasses(
       maxHp,
       currentHp,
       slotResult.spellSlots,
+      args.xp,
     )
   )
 

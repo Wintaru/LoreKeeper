@@ -62,25 +62,26 @@ export class AwardXpHandler implements IHandler {
     // via LevelUpClassRequest.
     if (leveledUp && isSingleClassed) {
       const only = currentClasses[0]
-      const hpGain = hitDieAverage(getHitDie(only.name)) + abilityModifier(character.abilityScores?.con ?? 10)
-      const totalHpGain = Math.max(0, hpGain * levelsGained)
+      // At least 1 HP per level, same floor the manual level-up UI applies —
+      // a very low CON modifier must not zero out a multi-level HP gain.
+      const hpGainPerLevel = Math.max(1, hitDieAverage(getHitDie(only.name)) + abilityModifier(character.abilityScores?.con ?? 10))
+      const totalHpGain = hpGainPerLevel * levelsGained
       const updatedClasses = addClassLevel(currentClasses, only.name, levelsGained)
 
+      // Class change and XP are written in the SAME accessor call (`xp` on
+      // persistClasses) so a mid-flight failure can't leave xp pointing at a
+      // different level than the stored class line-up.
       const result = await persistClasses(this.characterAccessor, this.spellcastingEngine, {
         correlationId: req.correlationId,
         characterId: req.characterId,
         classes: updatedClasses,
         maxHp: character.maxHp + totalHpGain,
         currentHp: character.currentHp + totalHpGain,
+        xp: newXp,
       })
 
       if (!result.success) {
         return new AwardXpResponse(req.correlationId, 0, 0, false, result.errorMessage ?? 'Failed to level up')
-      }
-
-      const xpUpdate = await this.characterAccessor.store(new UpdateXpRequest(req.characterId, newXp))
-      if (!xpUpdate.success) {
-        return new AwardXpResponse(req.correlationId, 0, 0, false, xpUpdate.errorMessage ?? 'Failed to update XP')
       }
 
       if (character.pushSubscription) {
