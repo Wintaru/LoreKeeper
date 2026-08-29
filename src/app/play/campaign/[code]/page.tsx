@@ -13,6 +13,7 @@ import { TokenAppearancePicker } from '@/components/battlemap/TokenAppearancePic
 import { rowToCharacter } from '@/lib/characterRow'
 import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
 import { resolveClasses, formatClassLine, abilityModifier } from '@/data/multiclass'
+import { maxSpellSlotLevelForCharacterLevel } from '@/data/spellSlots'
 
 
 type RollEntry = { label: string; result: number | string; timestamp: Date }
@@ -891,6 +892,7 @@ export default function PlayerCampaignPage() {
 
               <AddSlotLevelRow
                 characterId={character.id}
+                characterLevel={character.level}
                 spellSlots={character.spellSlots}
                 setCharacter={setCharacter}
               />
@@ -1111,18 +1113,23 @@ async function removeSlotLevel(
 
 function AddSlotLevelRow({
   characterId,
+  characterLevel,
   spellSlots,
   setCharacter,
 }: {
   characterId: string
+  characterLevel: number
   spellSlots: Character['spellSlots']
   setCharacter: React.Dispatch<React.SetStateAction<Character | null>>
 }) {
   const [newLevel, setNewLevel] = React.useState(1)
   const [newTotal, setNewTotal] = React.useState(2)
 
+  // Capped to what's actually obtainable at this character's level — a
+  // level 1 character has no legitimate way to have a 9th-level slot.
+  const maxLevel = maxSpellSlotLevelForCharacterLevel(characterLevel)
   const existingLevels = spellSlots.filter(s => slotKind(s) === 'spell').map(s => s.level)
-  const available = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => !existingLevels.includes(l))
+  const available = Array.from({ length: maxLevel }, (_, i) => i + 1).filter(l => !existingLevels.includes(l))
   if (available.length === 0) return null
 
   const effectiveLevel = available.includes(newLevel) ? newLevel : available[0]!

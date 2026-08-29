@@ -162,3 +162,30 @@ export function getNewlyUnlockedSlotLevels(className: string, oldLevel: number, 
 
 export const CASTER_CLASSES = ['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']
 export const ALL_CLASSES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard']
+
+// ── 5e caps ──────────────────────────────────────────────────────────────────
+// The manual "add a spell slot" editor (self-service, no DM PIN) otherwise lets
+// a player attach any slot level to any character — e.g. a level 1 character
+// with a 9th-level slot. These give a hard ceiling on what's ever legitimately
+// obtainable at a given character level, independent of class.
+
+/**
+ * The highest spell slot level ANY class could have at total character level
+ * `characterLevel` — the full-caster progression is the most generous (a half
+ * or third caster reaches every slot level later, never earlier), so it's a
+ * safe, class-independent ceiling. E.g. level 1-2 -> 1, level 17+ -> 9.
+ */
+export function maxSpellSlotLevelForCharacterLevel(characterLevel: number): number {
+  const l = Math.max(1, Math.min(20, characterLevel))
+  const row = FULL_CASTER[l] ?? []
+  for (let i = row.length - 1; i >= 0; i--) {
+    if (row[i] > 0) return i + 1
+  }
+  return 0
+}
+
+/** The highest Pact Magic slot level obtainable at total character level `characterLevel` (Warlock caps at 5th, reached at level 9). */
+export function maxPactSlotLevelForCharacterLevel(characterLevel: number): number {
+  const l = Math.max(1, Math.min(20, characterLevel))
+  return WARLOCK[l]?.slotLevel ?? 0
+}
