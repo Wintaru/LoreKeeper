@@ -16,6 +16,7 @@ import { UpdateCharacterHpHandler } from '@/accessors/character/handlers/UpdateC
 import { UpdateConditionsHandler as AccessorUpdateConditionsHandler } from '@/accessors/character/handlers/UpdateConditionsHandler'
 import { UpdateDeathSavesHandler as AccessorUpdateDeathSavesHandler } from '@/accessors/character/handlers/UpdateDeathSavesHandler'
 import { UpdateSpellSlotsHandler as AccessorUpdateSpellSlotsHandler } from '@/accessors/character/handlers/UpdateSpellSlotsHandler'
+import { UpdateShareInventoryHandler as AccessorUpdateShareInventoryHandler } from '@/accessors/character/handlers/UpdateShareInventoryHandler'
 import { LoadCharacterHandler } from '@/accessors/character/handlers/LoadCharacterHandler'
 import { UpdateXpHandler } from '@/accessors/character/handlers/UpdateXpHandler'
 import { KickCharacterHandler } from '@/accessors/character/handlers/KickCharacterHandler'
@@ -31,6 +32,7 @@ import {
   UpdateCharacterConditionsRequest,
   UpdateDeathSavesRequest as AccessorUpdateDeathSavesRequest,
   UpdateSpellSlotsRequest as AccessorUpdateSpellSlotsRequest,
+  UpdateShareInventoryRequest as AccessorUpdateShareInventoryRequest,
   LoadCharacterRequest,
   UpdateXpRequest,
   KickCharacterRequest,
@@ -104,6 +106,7 @@ import { UpdateHpHandler } from '@/managers/character/handlers/UpdateHpHandler'
 import { UpdateConditionsHandler as ManagerUpdateConditionsHandler } from '@/managers/character/handlers/UpdateConditionsHandler'
 import { UpdateDeathSavesHandler as ManagerUpdateDeathSavesHandler } from '@/managers/character/handlers/UpdateDeathSavesHandler'
 import { UpdateSpellSlotsHandler as ManagerUpdateSpellSlotsHandler } from '@/managers/character/handlers/UpdateSpellSlotsHandler'
+import { UpdateShareInventoryHandler as ManagerUpdateShareInventoryHandler } from '@/managers/character/handlers/UpdateShareInventoryHandler'
 import { AwardXpHandler } from '@/managers/character/handlers/AwardXpHandler'
 import { WhisperHandler } from '@/managers/character/handlers/WhisperHandler'
 import { KickPlayerHandler } from '@/managers/character/handlers/KickPlayerHandler'
@@ -117,6 +120,7 @@ import {
   UpdateConditionsRequest,
   UpdateDeathSavesRequest,
   UpdateSpellSlotsRequest,
+  UpdateShareInventoryRequest,
   AwardXpRequest,
   WhisperRequest,
   KickPlayerRequest,
@@ -400,6 +404,7 @@ export function createContainer(): Container {
       .register(UpdateCharacterConditionsRequest, new AccessorUpdateConditionsHandler(db))
       .register(AccessorUpdateDeathSavesRequest, new AccessorUpdateDeathSavesHandler(db))
       .register(AccessorUpdateSpellSlotsRequest, new AccessorUpdateSpellSlotsHandler(db))
+      .register(AccessorUpdateShareInventoryRequest, new AccessorUpdateShareInventoryHandler(db))
       .register(UpdateXpRequest, new UpdateXpHandler(db))
       .register(KickCharacterRequest, new KickCharacterHandler(db))
       .register(AccessorUpdateCharacterCurrencyRequest, new AccessorUpdateCharacterCurrencyHandler(db))
@@ -492,6 +497,7 @@ export function createContainer(): Container {
       .register(UpdateConditionsRequest, new ManagerUpdateConditionsHandler(characterAccessor))
       .register(UpdateDeathSavesRequest, new ManagerUpdateDeathSavesHandler(characterAccessor))
       .register(UpdateSpellSlotsRequest, new ManagerUpdateSpellSlotsHandler(characterAccessor))
+      .register(UpdateShareInventoryRequest, new ManagerUpdateShareInventoryHandler(characterAccessor))
       .register(AwardXpRequest, new AwardXpHandler(characterAccessor, xpEngine, notificationAccessor, spellcastingEngine))
       .register(WhisperRequest, new WhisperHandler(characterAccessor, notificationAccessor))
       .register(KickPlayerRequest, new KickPlayerHandler(characterAccessor))

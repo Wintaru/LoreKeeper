@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary, ClassLevel } from '@/types'
+import type { Character, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary, ClassLevel, InventoryItem, CustomCurrencyEntry } from '@/types'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { FeaturesTab } from '@/components/FeaturesTab'
@@ -95,6 +95,8 @@ export default function PlayerCampaignPage() {
   const [quests, setQuests] = useState<Quest[]>([])
   const [roster, setRoster] = useState<RosterSummary[]>([])
   const rosterRequestId = useRef(0)
+  const [partyWallet, setPartyWallet] = useState<{ gold: number; silver: number; copper: number; customCurrency: CustomCurrencyEntry[] }>({ gold: 0, silver: 0, copper: 0, customCurrency: [] })
+  const [sharedItems, setSharedItems] = useState<InventoryItem[]>([])
   const [mapAccessGranted, setMapAccessGranted] = useState(false)
   const [sharedMapIds, setSharedMapIds] = useState<string[]>([])
   const [mapViewport, setMapViewport] = useState<MapViewport | null>(null)
@@ -166,6 +168,15 @@ export default function PlayerCampaignPage() {
     if (isQuestsResponse(data)) setQuests(data.quests)
   }, [])
 
+  const fetchPartyInventory = useCallback(async (cid: string) => {
+    const res = await fetch(`/api/world/inventory?campaignId=${cid}`)
+    const data: unknown = await res.json()
+    if (isPartyInventoryResponse(data)) {
+      setPartyWallet({ gold: data.gold, silver: data.silver ?? 0, copper: data.copper ?? 0, customCurrency: data.customCurrency ?? [] })
+      setSharedItems(data.sharedItems)
+    }
+  }, [])
+
   const fetchRoster = useCallback(async (cid: string) => {
     const requestId = ++rosterRequestId.current
     const res = await fetch(`/api/campaigns/roster-summary?campaignId=${cid}`)
@@ -183,11 +194,11 @@ export default function PlayerCampaignPage() {
       if (!data) { setLoading(false); return }
       const cid = data.id as string
       setCampaignId(cid)
-      await Promise.all([loadCharacter(cid), loadMapAccess(cid), loadBattleMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid), fetchRoster(cid)])
+      await Promise.all([loadCharacter(cid), loadMapAccess(cid), loadBattleMapAccess(cid), fetchInitiativeRequest(cid), fetchQuests(cid), fetchRoster(cid), fetchPartyInventory(cid)])
       setLoading(false)
     }
     void init()
-  }, [code, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchInitiativeRequest, fetchQuests, fetchRoster])
+  }, [code, loadCharacter, loadMapAccess, loadBattleMapAccess, fetchInitiativeRequest, fetchQuests, fetchRoster, fetchPartyInventory])
 
   // Load fate log and whispers once character is known
   useEffect(() => {
@@ -585,7 +596,7 @@ export default function PlayerCampaignPage() {
       {playerTab === 'roster' && (
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-sm mx-auto p-4">
-            <PlayerRosterTab roster={roster} selfId={character.id} />
+            <PlayerRosterTab roster={roster} selfId={character.id} partyWallet={partyWallet} sharedItems={sharedItems} />
           </div>
         </div>
       )}
@@ -732,6 +743,42 @@ export default function PlayerCampaignPage() {
             ))}
           </div>
         )}
+
+        {/* Items */}
+        {character.loot.length > 0 && (
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-1.5">
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">Items</p>
+            {character.loot.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-sm">
+                <span className="text-stone-500 text-xs font-mono w-6 text-center">{item.quantity}×</span>
+                <span className="flex-1 text-stone-200">{item.name}</span>
+                {item.notes && <span className="text-xs text-stone-500">{item.notes}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Share inventory with party */}
+        <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-stone-300">Share inventory with party</p>
+            <p className="text-xs text-stone-600 mt-0.5">Let other players see your wallet and items in the Roster tab.</p>
+          </div>
+          <button
+            onClick={async () => {
+              const next = !character.shareInventoryWithParty
+              setCharacter(prev => prev ? { ...prev, shareInventoryWithParty: next } : prev)
+              await fetch('/api/characters/share-inventory', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ characterId: character.id, share: next }),
+              })
+            }}
+            className={`shrink-0 w-11 h-6 rounded-full transition-colors relative ${character.shareInventoryWithParty ? 'bg-violet-700' : 'bg-stone-700'}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${character.shareInventoryWithParty ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
 
         {character.conditions.length > 0 && (
           <div className="bg-stone-900 border border-amber-900/50 rounded-xl p-3">
@@ -1203,9 +1250,27 @@ function isRosterResponse(v: unknown): v is { characters: RosterSummary[] } {
   return typeof v === 'object' && v !== null && 'characters' in v && Array.isArray((v as Record<string, unknown>).characters)
 }
 
+function isPartyInventoryResponse(v: unknown): v is {
+  gold: number; silver?: number; copper?: number; customCurrency?: CustomCurrencyEntry[]; sharedItems: InventoryItem[]
+} {
+  return (
+    typeof v === 'object' && v !== null &&
+    typeof (v as Record<string, unknown>).gold === 'number' &&
+    Array.isArray((v as Record<string, unknown>).sharedItems)
+  )
+}
+
 // ── Player Roster Tab ──────────────────────────────────────────────────────────
 
-function PlayerRosterTab({ roster, selfId }: { roster: RosterSummary[]; selfId: string }) {
+function PlayerRosterTab({ roster, selfId, partyWallet, sharedItems }: {
+  roster: RosterSummary[]
+  selfId: string
+  partyWallet: { gold: number; silver: number; copper: number; customCurrency: CustomCurrencyEntry[] }
+  sharedItems: InventoryItem[]
+}) {
+  const [expandedInventory, setExpandedInventory] = useState<string | null>(null)
+  const hasPartyWallet = partyWallet.gold > 0 || partyWallet.silver > 0 || partyWallet.copper > 0 || partyWallet.customCurrency.length > 0
+
   if (roster.length === 0) {
     return (
       <div className="text-center py-16">
@@ -1215,31 +1280,99 @@ function PlayerRosterTab({ roster, selfId }: { roster: RosterSummary[]; selfId: 
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-stone-500 uppercase tracking-widest">Party ({roster.length})</p>
-      {roster.map(c => {
-        const hpPercent = c.maxHp > 0 ? Math.max(0, (c.currentHp / c.maxHp) * 100) : 0
-        const hpColor = hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
-        return (
-          <div key={c.id} className={`bg-stone-900 border rounded-xl p-3.5 space-y-2 ${c.id === selfId ? 'border-amber-700/50' : 'border-stone-800'}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{c.characterName}</p>
-                <p className="text-xs text-stone-500 truncate">{c.playerName}</p>
-                <p className="text-xs text-stone-600 truncate mt-0.5">
-                  {formatClassLine(resolveClasses(c.classes, c.class, c.level))}
-                </p>
+    <div className="space-y-4">
+      {(hasPartyWallet || sharedItems.length > 0) && (
+        <div className="bg-stone-900 border border-stone-800 rounded-xl p-3.5 space-y-2">
+          <p className="text-xs text-stone-500 uppercase tracking-widest">Party Wallet</p>
+          {hasPartyWallet ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {partyWallet.gold > 0 && <span className="text-amber-400 font-medium">{partyWallet.gold.toLocaleString()} gp</span>}
+              {partyWallet.silver > 0 && <span className="text-slate-400 font-medium">{partyWallet.silver.toLocaleString()} sp</span>}
+              {partyWallet.copper > 0 && <span className="text-orange-400 font-medium">{partyWallet.copper.toLocaleString()} cp</span>}
+              {partyWallet.customCurrency.map(cc => (
+                <span key={cc.name} className="text-stone-300">{cc.amount.toLocaleString()} {cc.name}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-stone-600 italic">Empty</p>
+          )}
+          {sharedItems.length > 0 && (
+            <div className="pt-1.5 border-t border-stone-800 space-y-1">
+              {sharedItems.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-sm">
+                  <span className="text-stone-500 text-xs font-mono">{item.quantity}×</span>
+                  <span className="text-stone-200">{item.name}</span>
+                  {item.notes && <span className="text-xs text-stone-500">— {item.notes}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <p className="text-xs text-stone-500 uppercase tracking-widest">Party ({roster.length})</p>
+        {roster.map(c => {
+          const hpPercent = c.maxHp > 0 ? Math.max(0, (c.currentHp / c.maxHp) * 100) : 0
+          const hpColor = hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
+          const isExpanded = expandedInventory === c.id
+          return (
+            <div key={c.id} className={`bg-stone-900 border rounded-xl p-3.5 space-y-2 ${c.id === selfId ? 'border-amber-700/50' : 'border-stone-800'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{c.characterName}</p>
+                  <p className="text-xs text-stone-500 truncate">{c.playerName}</p>
+                  <p className="text-xs text-stone-600 truncate mt-0.5">
+                    {formatClassLine(resolveClasses(c.classes, c.class, c.level))}
+                  </p>
+                </div>
+                <span className="text-sm font-bold font-mono tabular-nums shrink-0">
+                  {c.currentHp}<span className="text-stone-500"> / {c.maxHp}</span>
+                </span>
               </div>
-              <span className="text-sm font-bold font-mono tabular-nums shrink-0">
-                {c.currentHp}<span className="text-stone-500"> / {c.maxHp}</span>
-              </span>
+              <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPercent}%` }} />
+              </div>
+              {c.id !== selfId && c.shareInventoryWithParty && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => setExpandedInventory(isExpanded ? null : c.id)}
+                    className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                  >
+                    {isExpanded ? 'Hide inventory' : 'View inventory'}
+                  </button>
+                  {isExpanded && (
+                    <div className="mt-2 pt-2 border-t border-stone-800 space-y-1.5">
+                      {((c.gold ?? 0) > 0 || (c.silver ?? 0) > 0 || (c.copper ?? 0) > 0 || (c.customCurrency?.length ?? 0) > 0) && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                          {(c.gold ?? 0) > 0 && <span className="text-amber-400">{c.gold!.toLocaleString()} gp</span>}
+                          {(c.silver ?? 0) > 0 && <span className="text-slate-400">{c.silver!.toLocaleString()} sp</span>}
+                          {(c.copper ?? 0) > 0 && <span className="text-orange-400">{c.copper!.toLocaleString()} cp</span>}
+                          {c.customCurrency?.map(cc => (
+                            <span key={cc.name} className="text-stone-400">{cc.amount.toLocaleString()} {cc.name}</span>
+                          ))}
+                        </div>
+                      )}
+                      {c.loot && c.loot.length > 0 ? (
+                        <div className="space-y-1">
+                          {c.loot.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs">
+                              <span className="text-stone-500 font-mono">{item.quantity}×</span>
+                              <span className="text-stone-300">{item.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-stone-600 italic">No items</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
-              <div className={`h-full rounded-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPercent}%` }} />
-            </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

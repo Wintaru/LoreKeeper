@@ -2092,6 +2092,9 @@ function InventorySection({ campaignId, characters, gold, silver, copper, custom
                       <span className="text-sm font-medium">{char.characterName}</span>
                       {hasCoins && <span className="text-xs text-amber-600">{coins.gold}gp {coins.silver}sp {coins.copper}cp</span>}
                       {totalItems > 0 && <span className="text-xs text-stone-500">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>}
+                      {char.shareInventoryWithParty && (
+                        <span title="This player has chosen to share their inventory with the rest of the party" className="text-xs text-violet-500">👁 shared</span>
+                      )}
                     </div>
                     <span className="text-stone-600 text-xs">{expandedChar === char.id ? '▲' : '▼'}</span>
                   </button>

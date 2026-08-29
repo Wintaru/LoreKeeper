@@ -29,6 +29,13 @@ export class UpdateSpellSlotsRequest extends RequestBase {
   ) { super() }
 }
 
+export class UpdateShareInventoryRequest extends RequestBase {
+  constructor(
+    public readonly characterId: string,
+    public readonly shareInventoryWithParty: boolean,
+  ) { super() }
+}
+
 export class AwardXpRequest extends RequestBase {
   constructor(
     public readonly characterId: string,

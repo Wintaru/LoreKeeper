@@ -47,6 +47,7 @@ export function rowToCharacter(row: Record<string, unknown>): Character {
     tokenImageUrl: (row.token_image_url as string) ?? null,
     tokenStoragePath: (row.token_storage_path as string) ?? null,
     tokenColor: (row.token_color as string) ?? '#b45309',
+    shareInventoryWithParty: (row.share_inventory_with_party as boolean) ?? false,
     createdAt: new Date(row.created_at as string),
   }
 }

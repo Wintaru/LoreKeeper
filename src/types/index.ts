@@ -251,12 +251,15 @@ export interface Character {
   tokenImageUrl: string | null
   tokenStoragePath: string | null
   tokenColor: string
+  // Player self-service opt-in — lets other party members see this
+  // character's wallet/loot in the Roster tab. Defaults to false (private).
+  shareInventoryWithParty: boolean
   createdAt: Date
 }
 
 // Lean, non-sensitive projection of Character for surfaces that don't need
-// (and shouldn't receive) backstory/currency/loot/pushSubscription — the
-// player-facing roster and the pre-join "is this you?" picker.
+// (and shouldn't receive) backstory/pushSubscription — the player-facing
+// roster and the pre-join "is this you?" picker.
 export interface RosterSummary {
   id: string
   characterName: string
@@ -268,6 +271,14 @@ export interface RosterSummary {
   level: number
   currentHp: number
   maxHp: number
+  shareInventoryWithParty: boolean
+  // Only populated when shareInventoryWithParty is true — the character
+  // themselves opted into other party members seeing this.
+  gold?: number
+  silver?: number
+  copper?: number
+  customCurrency?: CustomCurrencyEntry[]
+  loot?: LootItem[]
 }
 
 export interface Whisper {
