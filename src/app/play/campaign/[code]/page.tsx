@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Character, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary, ClassLevel } from '@/types'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
+import { FeaturesTab } from '@/components/FeaturesTab'
 import { LevelUpModal } from '@/components/LevelUpModal'
 import { PlayerBattleMapView } from '@/components/battlemap/PlayerBattleMapView'
 import { TokenAppearancePicker } from '@/components/battlemap/TokenAppearancePicker'
@@ -90,7 +91,7 @@ export default function PlayerCampaignPage() {
   // The class line-up as it was before the level, so the modal can tell which
   // class actually gained the level (it is not always the primary one).
   const prevClassesRef = useRef<ClassLevel[]>([])
-  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests' | 'roster'>('character')
+  const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'features' | 'spells' | 'rulebook' | 'quests' | 'roster'>('character')
   const [quests, setQuests] = useState<Quest[]>([])
   const [roster, setRoster] = useState<RosterSummary[]>([])
   const rosterRequestId = useRef(0)
@@ -456,6 +457,10 @@ export default function PlayerCampaignPage() {
             setPlayerTab('spells')
             setLevelUpModal(null)
           }}
+          onBrowseFeatures={() => {
+            setPlayerTab('features')
+            setLevelUpModal(null)
+          }}
         />
       )}
 
@@ -494,6 +499,10 @@ export default function PlayerCampaignPage() {
                 className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'battleMap' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
               >Battle Map</button>
             )}
+            <button
+              onClick={() => setPlayerTab('features')}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'features' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
+            >Features</button>
             <button
               onClick={() => setPlayerTab('spells')}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${playerTab === 'spells' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
@@ -538,6 +547,14 @@ export default function PlayerCampaignPage() {
             selectedMapId={selectedBattleMapId}
             onSelectMap={setSelectedBattleMapId}
           />
+        </div>
+      )}
+
+      {playerTab === 'features' && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-sm mx-auto p-4">
+            <FeaturesTab classes={resolveClasses(character.classes, character.class, character.level)} />
+          </div>
         </div>
       )}
 

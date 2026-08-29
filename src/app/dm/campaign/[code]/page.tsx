@@ -14,6 +14,7 @@ import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { BattleMapEditor } from '@/components/battlemap/BattleMapEditor'
 import { MulticlassPanel } from '@/components/MulticlassPanel'
+import { FeaturesTab } from '@/components/FeaturesTab'
 import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
 import { resolveClasses, formatClassLine } from '@/data/multiclass'
 
@@ -355,6 +356,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
   const [showStatEdit, setShowStatEdit] = useState(false)
   const [showConditions, setShowConditions] = useState(false)
   const [showFightingStyle, setShowFightingStyle] = useState(false)
+  const [showFeatures, setShowFeatures] = useState(false)
   const [maxHpInput, setMaxHpInput] = useState(String(c.maxHp))
   const [currentHpInput, setCurrentHpInput] = useState(String(c.currentHp))
   const [acInput, setAcInput] = useState(String(c.armorClass))
@@ -621,6 +623,21 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
           <p className="text-sm text-stone-300 mt-2 leading-relaxed italic">
             {describeFightingStyle(c)}
           </p>
+        )}
+      </div>
+
+      {/* Class features gained so far */}
+      <div className="border-t border-stone-800/50 pt-3">
+        <button
+          onClick={() => setShowFeatures(v => !v)}
+          className="text-xs text-stone-600 hover:text-stone-400 transition-colors"
+        >
+          {showFeatures ? 'Hide features' : 'Features'}
+        </button>
+        {showFeatures && (
+          <div className="mt-2">
+            <FeaturesTab classes={classes} />
+          </div>
         )}
       </div>
     </div>

@@ -34,6 +34,7 @@ export function LevelUpModal({
   onClose,
   onApplySpellSlots,
   onBrowseSpells,
+  onBrowseFeatures,
 }: {
   characterName: string
   /** The character's class line-up AFTER the level. */
@@ -45,6 +46,7 @@ export function LevelUpModal({
   onClose: () => void
   onApplySpellSlots: (slots: SpellSlot[]) => Promise<void>
   onBrowseSpells: () => void
+  onBrowseFeatures: () => void
 }) {
   const [features, setFeatures] = useState<ApiFeature[]>([])
   const [featureDetails, setFeatureDetails] = useState<Record<string, FeatureDetail>>({})
@@ -136,7 +138,12 @@ export function LevelUpModal({
 
           {/* Class Features */}
           <div className="space-y-2">
-            <p className="text-xs text-stone-500 uppercase tracking-widest">Features Gained</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-stone-500 uppercase tracking-widest">Features Gained</p>
+              <button onClick={onBrowseFeatures} className="text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2">
+                View all my features
+              </button>
+            </div>
             {loadingFeatures && (
               <p className="text-stone-600 text-sm py-2">Loading class features…</p>
             )}
