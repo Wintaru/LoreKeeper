@@ -360,16 +360,21 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
   const [maxHpInput, setMaxHpInput] = useState(String(c.maxHp))
   const [currentHpInput, setCurrentHpInput] = useState(String(c.currentHp))
   const [acInput, setAcInput] = useState(String(c.armorClass))
+  const [speedInput, setSpeedInput] = useState(c.speed !== null ? String(c.speed) : '')
+  const [perceptionInput, setPerceptionInput] = useState(c.passivePerception !== null ? String(c.passivePerception) : '')
 
   async function handleSaveStats() {
     const maxHp = parseInt(maxHpInput, 10)
     const currentHp = Math.min(parseInt(currentHpInput, 10), maxHp)
     const armorClass = parseInt(acInput, 10)
     if (isNaN(maxHp) || isNaN(currentHp) || isNaN(armorClass)) return
+    const speed = speedInput.trim() === '' ? null : parseInt(speedInput, 10)
+    const passivePerception = perceptionInput.trim() === '' ? null : parseInt(perceptionInput, 10)
+    if ((speed !== null && isNaN(speed)) || (passivePerception !== null && isNaN(passivePerception))) return
     await fetch('/api/characters/stats', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass, dmPin: getDmPin() }),
+      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass, speed, passivePerception, dmPin: getDmPin() }),
     })
     setShowStatEdit(false)
     onRefresh()
@@ -465,6 +470,8 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
       </div>
       <div className="flex items-center gap-3 text-sm text-stone-400 flex-wrap">
         <span>AC {c.armorClass}</span>
+        {c.speed !== null && <span>{c.speed} ft</span>}
+        {c.passivePerception !== null && <span title="Passive Perception">Perc {c.passivePerception}</span>}
         {c.currentHp === 0 && c.deathSaves.failures >= 3
           ? <span title="Dead" className="text-base leading-none">💀</span>
           : c.currentHp === 0
@@ -546,12 +553,28 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
                   className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm font-mono text-center focus:outline-none focus:border-emerald-500" />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-stone-600 mb-1">Speed (ft)</p>
+                <input type="number" value={speedInput} placeholder="30" onChange={e => setSpeedInput(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm font-mono text-center focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <p className="text-xs text-stone-600 mb-1">Passive Perception</p>
+                <input type="number" value={perceptionInput} placeholder="10" onChange={e => setPerceptionInput(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm font-mono text-center focus:outline-none focus:border-emerald-500" />
+              </div>
+            </div>
             <div className="flex gap-2">
               <button onClick={() => void handleSaveStats()}
                 className="flex-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-medium py-1.5 rounded-lg transition-colors">
                 Save Stats
               </button>
-              <button onClick={() => { setShowStatEdit(false); setMaxHpInput(String(c.maxHp)); setCurrentHpInput(String(c.currentHp)); setAcInput(String(c.armorClass)) }}
+              <button onClick={() => {
+                setShowStatEdit(false)
+                setMaxHpInput(String(c.maxHp)); setCurrentHpInput(String(c.currentHp)); setAcInput(String(c.armorClass))
+                setSpeedInput(c.speed !== null ? String(c.speed) : ''); setPerceptionInput(c.passivePerception !== null ? String(c.passivePerception) : '')
+              }}
                 className="text-stone-500 hover:text-stone-300 text-xs px-3 transition-colors">
                 Cancel
               </button>
@@ -560,7 +583,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
         ) : (
           <button onClick={() => setShowStatEdit(true)}
             className="text-xs text-stone-600 hover:text-stone-400 transition-colors">
-            Edit stats (HP / AC)
+            Edit stats (HP / AC / Speed / Perception)
           </button>
         )}
       </div>

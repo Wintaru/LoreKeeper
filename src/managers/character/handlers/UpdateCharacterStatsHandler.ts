@@ -11,7 +11,7 @@ export class UpdateCharacterStatsHandler implements IHandler {
   async handle(request: RequestBase): Promise<ResponseBase> {
     const req = request as UpdateCharacterStatsRequest
     return this.characterAccessor.store(
-      new AccessorRequest(req.characterId, req.maxHp, req.currentHp, req.armorClass)
+      new AccessorRequest(req.characterId, req.maxHp, req.currentHp, req.armorClass, req.speed, req.passivePerception)
     )
   }
 }

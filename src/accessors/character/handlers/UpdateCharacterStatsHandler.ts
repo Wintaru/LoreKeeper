@@ -12,7 +12,13 @@ export class UpdateCharacterStatsHandler implements IHandler {
     const req = request as UpdateCharacterStatsRequest
     const { error } = await this.db
       .from('characters')
-      .update({ max_hp: req.maxHp, current_hp: req.currentHp, armor_class: req.armorClass })
+      .update({
+        max_hp: req.maxHp,
+        current_hp: req.currentHp,
+        armor_class: req.armorClass,
+        speed: req.speed,
+        passive_perception: req.passivePerception,
+      })
       .eq('id', req.characterId)
 
     if (error) {

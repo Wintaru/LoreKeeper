@@ -630,6 +630,14 @@ export default function PlayerCampaignPage() {
             <p className="text-2xl font-bold mt-1">{character.armorClass}</p>
           </div>
           <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-center">
+            <p className="text-stone-400 text-xs">Speed</p>
+            <p className="text-2xl font-bold mt-1">{character.speed ?? '—'}<span className="text-stone-500 text-sm font-normal">{character.speed !== null ? ' ft' : ''}</span></p>
+          </div>
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-center">
+            <p className="text-stone-400 text-xs">Passive Perception</p>
+            <p className="text-2xl font-bold mt-1">{character.passivePerception ?? '—'}</p>
+          </div>
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-center">
             <p className="text-stone-400 text-xs">Level</p>
             <p className="text-2xl font-bold mt-1">{character.level}</p>
             {(() => {

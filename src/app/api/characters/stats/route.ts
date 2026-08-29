@@ -14,7 +14,10 @@ export async function PUT(request: Request) {
 
   const { characterManager } = createContainer()
   const result = await characterManager.execute(
-    new UpdateCharacterStatsRequest(body.characterId, body.maxHp, body.currentHp, body.armorClass)
+    new UpdateCharacterStatsRequest(
+      body.characterId, body.maxHp, body.currentHp, body.armorClass,
+      body.speed ?? null, body.passivePerception ?? null,
+    )
   )
 
   if (!result.success) {
@@ -25,7 +28,8 @@ export async function PUT(request: Request) {
 }
 
 function isUpdateStatsBody(value: unknown): value is {
-  characterId: string; maxHp: number; currentHp: number; armorClass: number; dmPin: string
+  characterId: string; maxHp: number; currentHp: number; armorClass: number
+  speed?: number | null; passivePerception?: number | null; dmPin: string
 } {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
@@ -34,6 +38,8 @@ function isUpdateStatsBody(value: unknown): value is {
     typeof v.maxHp === 'number' &&
     typeof v.currentHp === 'number' &&
     typeof v.armorClass === 'number' &&
+    (v.speed === undefined || v.speed === null || typeof v.speed === 'number') &&
+    (v.passivePerception === undefined || v.passivePerception === null || typeof v.passivePerception === 'number') &&
     typeof v.dmPin === 'string'
   )
 }

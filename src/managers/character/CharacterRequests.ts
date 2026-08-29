@@ -81,6 +81,8 @@ export class UpdateCharacterStatsRequest extends RequestBase {
     public readonly maxHp: number,
     public readonly currentHp: number,
     public readonly armorClass: number,
+    public readonly speed: number | null,
+    public readonly passivePerception: number | null,
   ) { super() }
 }
 
