@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, BattleMap, MapViewport, MapType, InitiativeRequest, Quest } from '@/types'
+import type { Character, FateEvent, FateEventType, CombatSession, Condition, DeathSaves, Npc, Location, SessionNote, InventoryItem, LootItem, NpcRelationship, CustomTable, CustomCurrencyEntry, MonsterGroup, Monster, DamageType, ConditionImmunityType, EncounterDifficulty, CampaignMap, BattleMap, MapViewport, MapType, InitiativeRequest, Quest, AbilityScores } from '@/types'
 import { EncounterEngine } from '@/engines/encounter/EncounterEngine'
 import { EvaluateEncounterRequest } from '@/engines/encounter/EncounterEngineRequests'
 import { EvaluateEncounterResponse } from '@/engines/encounter/EncounterEngineResponses'
@@ -16,7 +16,9 @@ import { BattleMapEditor } from '@/components/battlemap/BattleMapEditor'
 import { MulticlassPanel } from '@/components/MulticlassPanel'
 import { FeaturesTab } from '@/components/FeaturesTab'
 import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
-import { resolveClasses, formatClassLine } from '@/data/multiclass'
+import { resolveClasses, formatClassLine, abilityModifier, ABILITY_LABELS } from '@/data/multiclass'
+
+const ABILITY_KEYS: (keyof AbilityScores)[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 type Tab = 'roster' | 'combat' | 'fate' | 'world' | 'encounter' | 'maps' | 'battleMaps' | 'spells' | 'rulebook'
 type WorldTab = 'npcs' | 'locations' | 'inventory' | 'log' | 'tables' | 'quests'
@@ -362,6 +364,10 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
   const [acInput, setAcInput] = useState(String(c.armorClass))
   const [speedInput, setSpeedInput] = useState(c.speed !== null ? String(c.speed) : '')
   const [perceptionInput, setPerceptionInput] = useState(c.passivePerception !== null ? String(c.passivePerception) : '')
+  const makeAbilityInputs = () => Object.fromEntries(
+    ABILITY_KEYS.map(key => [key, String(c.abilityScores?.[key] ?? 10)])
+  ) as Record<keyof AbilityScores, string>
+  const [abilityInputs, setAbilityInputs] = useState<Record<keyof AbilityScores, string>>(makeAbilityInputs)
 
   async function handleSaveStats() {
     const maxHp = parseInt(maxHpInput, 10)
@@ -371,10 +377,13 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
     const speed = speedInput.trim() === '' ? null : parseInt(speedInput, 10)
     const passivePerception = perceptionInput.trim() === '' ? null : parseInt(perceptionInput, 10)
     if ((speed !== null && isNaN(speed)) || (passivePerception !== null && isNaN(passivePerception))) return
+    const abilityScoreEntries = ABILITY_KEYS.map(key => [key, parseInt(abilityInputs[key], 10)] as const)
+    if (abilityScoreEntries.some(([, v]) => isNaN(v))) return
+    const abilityScores = Object.fromEntries(abilityScoreEntries) as unknown as AbilityScores
     await fetch('/api/characters/stats', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass, speed, passivePerception, dmPin: getDmPin() }),
+      body: JSON.stringify({ characterId: c.id, maxHp, currentHp, armorClass, speed, passivePerception, abilityScores, dmPin: getDmPin() }),
     })
     setShowStatEdit(false)
     onRefresh()
@@ -565,6 +574,28 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
                   className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-sm font-mono text-center focus:outline-none focus:border-emerald-500" />
               </div>
             </div>
+            <div>
+              <p className="text-xs text-stone-600 mb-1">Ability Scores</p>
+              <div className="grid grid-cols-6 gap-1.5">
+                {ABILITY_KEYS.map(key => (
+                  <div key={key}>
+                    <p className="text-[0.65rem] text-stone-600 mb-0.5 text-center uppercase">{key}</p>
+                    <input type="number" value={abilityInputs[key]}
+                      onChange={e => setAbilityInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                      title={ABILITY_LABELS[key]}
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg px-1 py-1.5 text-sm font-mono text-center focus:outline-none focus:border-emerald-500" />
+                    <p className="text-[0.6rem] text-stone-600 mt-0.5 text-center">
+                      {(() => {
+                        const n = parseInt(abilityInputs[key], 10)
+                        if (isNaN(n)) return ''
+                        const mod = abilityModifier(n)
+                        return mod >= 0 ? `+${mod}` : mod
+                      })()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-2">
               <button onClick={() => void handleSaveStats()}
                 className="flex-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-medium py-1.5 rounded-lg transition-colors">
@@ -574,6 +605,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
                 setShowStatEdit(false)
                 setMaxHpInput(String(c.maxHp)); setCurrentHpInput(String(c.currentHp)); setAcInput(String(c.armorClass))
                 setSpeedInput(c.speed !== null ? String(c.speed) : ''); setPerceptionInput(c.passivePerception !== null ? String(c.passivePerception) : '')
+                setAbilityInputs(makeAbilityInputs())
               }}
                 className="text-stone-500 hover:text-stone-300 text-xs px-3 transition-colors">
                 Cancel
@@ -583,7 +615,7 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
         ) : (
           <button onClick={() => setShowStatEdit(true)}
             className="text-xs text-stone-600 hover:text-stone-400 transition-colors">
-            Edit stats (HP / AC / Speed / Perception)
+            Edit stats (HP / AC / Speed / Perception / Abilities)
           </button>
         )}
       </div>
@@ -2934,8 +2966,6 @@ const CR_OPTIONS = [
   '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
   '21', '22', '23', '24', '25', '26', '27', '28', '29', '30',
 ]
-
-const ABILITY_KEYS: (keyof Monster['abilityScores'])[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 function abilityMod(score: number): string {
   const mod = Math.floor((score - 10) / 2)

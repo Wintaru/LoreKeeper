@@ -1,5 +1,5 @@
 import { RequestBase } from '@/common/RequestBase'
-import type { DeathSaves, Condition, SpellSlot, CustomCurrencyEntry, ClassLevel } from '@/types'
+import type { DeathSaves, Condition, SpellSlot, CustomCurrencyEntry, ClassLevel, AbilityScores } from '@/types'
 
 export class UpdateHpRequest extends RequestBase {
   constructor(
@@ -83,6 +83,7 @@ export class UpdateCharacterStatsRequest extends RequestBase {
     public readonly armorClass: number,
     public readonly speed: number | null,
     public readonly passivePerception: number | null,
+    public readonly abilityScores: AbilityScores | null,
   ) { super() }
 }
 

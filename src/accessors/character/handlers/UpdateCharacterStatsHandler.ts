@@ -18,6 +18,7 @@ export class UpdateCharacterStatsHandler implements IHandler {
         armor_class: req.armorClass,
         speed: req.speed,
         passive_perception: req.passivePerception,
+        ability_scores: req.abilityScores,
       })
       .eq('id', req.characterId)
 

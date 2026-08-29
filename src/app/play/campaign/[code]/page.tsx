@@ -12,7 +12,7 @@ import { PlayerBattleMapView } from '@/components/battlemap/PlayerBattleMapView'
 import { TokenAppearancePicker } from '@/components/battlemap/TokenAppearancePicker'
 import { rowToCharacter } from '@/lib/characterRow'
 import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
-import { resolveClasses, formatClassLine } from '@/data/multiclass'
+import { resolveClasses, formatClassLine, abilityModifier } from '@/data/multiclass'
 
 
 type RollEntry = { label: string; result: number | string; timestamp: Date }
@@ -650,6 +650,24 @@ export default function PlayerCampaignPage() {
             })()}
           </div>
         </div>
+
+        {/* Ability scores */}
+        {character.abilityScores && (
+          <div className="grid grid-cols-6 gap-1.5">
+            {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map(key => (
+              <div key={key} className="bg-stone-900 border border-stone-800 rounded-lg py-2 text-center">
+                <p className="text-stone-500 text-[0.6rem] uppercase">{key}</p>
+                <p className="text-lg font-bold leading-tight">{character.abilityScores![key]}</p>
+                <p className="text-stone-500 text-[0.65rem]">
+                  {(() => {
+                    const mod = abilityModifier(character.abilityScores![key])
+                    return mod >= 0 ? `+${mod}` : mod
+                  })()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* XP progress */}
         {(() => {
