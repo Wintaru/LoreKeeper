@@ -12,7 +12,7 @@ export class UpdateXpHandler implements IHandler {
     const req = request as UpdateXpRequest
     const { error } = await this.db
       .from('characters')
-      .update({ xp: req.xp, level: req.level })
+      .update({ xp: req.xp })
       .eq('id', req.characterId)
 
     if (error) {

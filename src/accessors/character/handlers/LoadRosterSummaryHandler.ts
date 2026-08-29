@@ -4,7 +4,8 @@ import type { ResponseBase } from '@/common/ResponseBase'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { LoadRosterSummaryRequest } from '../CharacterRequests'
 import { LoadRosterSummaryResponse } from '../CharacterResponses'
-import type { RosterSummary } from '@/types'
+import type { RosterSummary, ClassLevel } from '@/types'
+import { resolveClasses } from '@/data/multiclass'
 
 // Deliberately narrow projection — this backs player-facing surfaces (the
 // in-game Roster tab and the pre-join "is this you?" picker), so it must
@@ -17,7 +18,7 @@ export class LoadRosterSummaryHandler implements IHandler {
     const req = request as LoadRosterSummaryRequest
     const { data, error } = await this.db
       .from('characters')
-      .select('id, character_name, player_name, class, level, current_hp, max_hp')
+      .select('id, character_name, player_name, class, classes, level, current_hp, max_hp')
       .eq('campaign_id', req.campaignId)
       .eq('is_active', true)
       .order('created_at', { ascending: true })
@@ -31,12 +32,15 @@ export class LoadRosterSummaryHandler implements IHandler {
 }
 
 function rowToSummary(row: Record<string, unknown>): RosterSummary {
+  const characterClass = row.class as string
+  const level = row.level as number
   return {
     id: row.id as string,
     characterName: row.character_name as string,
     playerName: row.player_name as string,
-    class: row.class as string,
-    level: row.level as number,
+    class: characterClass,
+    classes: resolveClasses(row.classes as ClassLevel[] | null, characterClass, level),
+    level,
     currentHp: row.current_hp as number,
     maxHp: row.max_hp as number,
   }

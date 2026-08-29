@@ -1,6 +1,9 @@
 import type { SpellSlot } from '@/types'
 
-export type CasterType = 'full' | 'half' | 'warlock' | 'none'
+// 'third' covers Eldritch Knight / Arcane Trickster. It is never returned by
+// `getCasterType`, which only sees a base class name — resolving it needs the
+// subclass too, so use `getCasterTypeForEntry` in `multiclass.ts` for that.
+export type CasterType = 'full' | 'half' | 'third' | 'warlock' | 'none'
 
 // Indices are spell slot levels 1–9 (0-indexed array: index 0 = 1st-level slots)
 const FULL_CASTER: Record<number, number[]> = {
@@ -97,14 +100,18 @@ const KNOWN_CLASS_INDICES = [
 
 export function getCasterType(className: string): CasterType {
   const lower = className.toLowerCase().trim()
+  if (!lower) return 'none'
   if (CLASS_CASTER_TYPE[lower]) return CLASS_CASTER_TYPE[lower]
-  // Fuzzy: startsWith match (handles "Arcane Trickster" → no match → 'none')
+  // Fuzzy prefix match so free-text entries like "Fighter (Eldritch Knight)"
+  // still resolve to their base class. The empty-string guard above matters:
+  // without it every key "startsWith" '' and the first key would always win.
   const match = Object.keys(CLASS_CASTER_TYPE).find(k => lower.startsWith(k) || k.startsWith(lower))
   return match ? CLASS_CASTER_TYPE[match]! : 'none'
 }
 
 export function getApiClassIndex(className: string): string | null {
   const lower = className.toLowerCase().trim()
+  if (!lower) return null
   return (
     KNOWN_CLASS_INDICES.find(c => c === lower) ??
     KNOWN_CLASS_INDICES.find(c => lower.startsWith(c) || c.startsWith(lower)) ??
@@ -129,10 +136,18 @@ export function getSpellSlotsForLevel(className: string, level: number): SpellSl
     .filter(s => s.total > 0)
 }
 
-// Merges new slot totals onto existing slots, preserving used counts where possible
+/** Two slot entries are the same pool only if their level AND pool kind match. */
+function sameSlotPool(a: SpellSlot, b: SpellSlot): boolean {
+  return a.level === b.level && (a.kind ?? 'spell') === (b.kind ?? 'spell')
+}
+
+// Merges new slot totals onto existing slots, preserving used counts where
+// possible. Pact Magic slots are matched separately from Spellcasting slots, so
+// a warlock/wizard's 2nd-level pact slots never absorb the used count of their
+// 2nd-level shared slots (or vice versa).
 export function mergeSpellSlots(existing: SpellSlot[], newSlots: SpellSlot[]): SpellSlot[] {
   return newSlots.map(ns => {
-    const old = existing.find(e => e.level === ns.level)
+    const old = existing.find(e => sameSlotPool(e, ns))
     return { ...ns, used: old ? Math.min(old.used, ns.total) : 0 }
   })
 }

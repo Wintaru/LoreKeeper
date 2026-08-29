@@ -3,15 +3,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Character, CustomCurrencyEntry, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary } from '@/types'
+import type { Character, FateEvent, FateEventType, Whisper, CampaignMap, BattleMap, MapViewport, InitiativeRequest, Quest, RosterSummary, ClassLevel } from '@/types'
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { LevelUpModal } from '@/components/LevelUpModal'
 import { PlayerBattleMapView } from '@/components/battlemap/PlayerBattleMapView'
 import { TokenAppearancePicker } from '@/components/battlemap/TokenAppearancePicker'
+import { rowToCharacter } from '@/lib/characterRow'
+import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
+import { resolveClasses, formatClassLine } from '@/data/multiclass'
 
-const XP_THRESHOLDS = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000]
-function xpForNextLevel(level: number) { return level >= 20 ? null : XP_THRESHOLDS[level] }
 
 type RollEntry = { label: string; result: number | string; timestamp: Date }
 
@@ -84,8 +85,11 @@ export default function PlayerCampaignPage() {
   const [initiativeRequest, setInitiativeRequest] = useState<InitiativeRequest | null>(null)
   const [initiativeRollInput, setInitiativeRollInput] = useState('')
   const [initiativeSubmitting, setInitiativeSubmitting] = useState(false)
-  const [levelUpModal, setLevelUpModal] = useState<{ level: number; prevLevel: number } | null>(null)
+  const [levelUpModal, setLevelUpModal] = useState<{ level: number; previousClasses: ClassLevel[] } | null>(null)
   const prevLevelRef = useRef<number | null>(null)
+  // The class line-up as it was before the level, so the modal can tell which
+  // class actually gained the level (it is not always the primary one).
+  const prevClassesRef = useRef<ClassLevel[]>([])
   const [playerTab, setPlayerTab] = useState<'character' | 'map' | 'battleMap' | 'spells' | 'rulebook' | 'quests' | 'roster'>('character')
   const [quests, setQuests] = useState<Quest[]>([])
   const [roster, setRoster] = useState<RosterSummary[]>([])
@@ -193,12 +197,14 @@ export default function PlayerCampaignPage() {
 
   // Detect level-up after a character update — show the level-up modal
   useEffect(() => {
-    if (!character) { prevLevelRef.current = null; return }
+    if (!character) { prevLevelRef.current = null; prevClassesRef.current = []; return }
+    const currentClasses = resolveClasses(character.classes, character.class, character.level)
     if (prevLevelRef.current !== null && character.level > prevLevelRef.current) {
-      setLevelUpModal({ level: character.level, prevLevel: prevLevelRef.current })
+      setLevelUpModal({ level: character.level, previousClasses: prevClassesRef.current })
     }
     prevLevelRef.current = character.level
-  }, [character?.level])
+    prevClassesRef.current = currentClasses
+  }, [character?.level, character?.classes, character?.class])
 
   // Realtime: HP updates, fate draws (toast), fate reveals (log refresh), whispers (toast + log), map access
   useEffect(() => {
@@ -433,7 +439,8 @@ export default function PlayerCampaignPage() {
       {levelUpModal !== null && (
         <LevelUpModal
           characterName={character.characterName}
-          className={character.class}
+          classes={resolveClasses(character.classes, character.class, character.level)}
+          previousClasses={levelUpModal.previousClasses}
           newLevel={levelUpModal.level}
           currentSpellSlots={character.spellSlots}
           onClose={() => setLevelUpModal(null)}
@@ -456,7 +463,7 @@ export default function PlayerCampaignPage() {
       <div className="shrink-0 border-b border-stone-800 px-4 pt-4 pb-0">
         <div className="max-w-sm mx-auto">
           <h1 className="text-2xl font-bold">{character.characterName}</h1>
-          <p className="text-stone-400">{character.playerName} · {character.class} {character.level}</p>
+          <p className="text-stone-400">{character.playerName} · {formatClassLine(resolveClasses(character.classes, character.class, character.level))}</p>
           <div className="flex items-center justify-between">
             <p className="font-mono text-stone-500 text-xs mt-0.5">{code.toUpperCase()}</p>
             <button
@@ -608,13 +615,24 @@ export default function PlayerCampaignPage() {
           <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-center">
             <p className="text-stone-400 text-xs">Level</p>
             <p className="text-2xl font-bold mt-1">{character.level}</p>
+            {(() => {
+              const cls = resolveClasses(character.classes, character.class, character.level)
+              return (
+                <p className="text-stone-500 text-[0.65rem] mt-0.5 leading-tight">
+                  {cls.length > 1 ? formatClassLine(cls) : `Proficiency +${proficiencyBonusForLevel(character.level)}`}
+                </p>
+              )
+            })()}
           </div>
         </div>
 
         {/* XP progress */}
         {(() => {
-          const nextXp = xpForNextLevel(character.level)
-          const prevXp = XP_THRESHOLDS[character.level - 1] ?? 0
+          // XP buys a level; the DM assigns it to a class. Until they do,
+          // `earnedLevel` can run ahead of `character.level`.
+          const earnedLevel = xpToLevel(character.xp)
+          const nextXp = xpForNextLevel(earnedLevel)
+          const prevXp = XP_THRESHOLDS[earnedLevel - 1] ?? 0
           const xpPercent = nextXp ? Math.min(100, ((character.xp - prevXp) / (nextXp - prevXp)) * 100) : 100
           return (
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2">
@@ -627,9 +645,14 @@ export default function PlayerCampaignPage() {
               <div className="h-2 bg-stone-800 rounded-full overflow-hidden">
                 <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${xpPercent}%` }} />
               </div>
+              {earnedLevel > character.level && (
+                <p className="text-xs text-violet-400">
+                  Level {earnedLevel} earned — your DM will choose the class.
+                </p>
+              )}
               {nextXp && (
                 <p className="text-xs text-stone-600 text-right tabular-nums">
-                  {(nextXp - character.xp).toLocaleString()} XP to level {character.level + 1}
+                  {(nextXp - character.xp).toLocaleString()} XP to level {earnedLevel + 1}
                 </p>
               )}
             </div>
@@ -713,49 +736,77 @@ export default function PlayerCampaignPage() {
           </div>
         )}
 
-        {/* Spell slots */}
-        <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
-          <p className="text-xs text-stone-500 uppercase tracking-widest">Spell Slots</p>
-          {character.spellSlots.length === 0 && (
-            <p className="text-stone-600 text-xs">No spell slots yet — add a level below.</p>
-          )}
-          <div className="space-y-2">
-            {character.spellSlots.map(slot => (
-              <div key={slot.level} className="flex items-center gap-2">
+        {/* Spell slots — Spellcasting and Pact Magic are separate pools */}
+        {(() => {
+          const sharedSlots = character.spellSlots.filter(s => slotKind(s) === 'spell')
+          const pactSlots = character.spellSlots.filter(s => slotKind(s) === 'pact')
+
+          const renderRow = (slot: typeof character.spellSlots[number]) => {
+            const kind = slotKind(slot)
+            const isPact = kind === 'pact'
+            return (
+              <div key={`${kind}-${slot.level}`} className="flex items-center gap-2">
                 <span className="text-stone-500 text-xs w-10 shrink-0">Lvl {slot.level}</span>
                 <div className="flex gap-1 flex-wrap flex-1">
                   {Array.from({ length: slot.total }).map((_, i) => {
                     const isUsed = i < slot.used
                     return (
                       <button key={i}
-                        onClick={() => void toggleSpellSlot(character.id, slot.level, i, character.spellSlots, setCharacter)}
-                        className={`w-6 h-6 rounded-full border-2 transition-colors ${isUsed ? 'border-stone-600 bg-stone-800' : 'border-violet-500 bg-violet-900/50'}`}
+                        onClick={() => void toggleSpellSlot(character.id, slot.level, kind, i, character.spellSlots, setCharacter)}
+                        className={`w-6 h-6 rounded-full border-2 transition-colors ${
+                          isUsed
+                            ? 'border-stone-600 bg-stone-800'
+                            : isPact
+                              ? 'border-amber-500 bg-amber-900/50'
+                              : 'border-violet-500 bg-violet-900/50'
+                        }`}
                       />
                     )
                   })}
                 </div>
                 <span className="text-xs text-stone-500 tabular-nums w-8 text-right shrink-0">{slot.total - slot.used}/{slot.total}</span>
                 <button
-                  onClick={() => void adjustSlotTotal(character.id, slot.level, -1, character.spellSlots, setCharacter)}
+                  onClick={() => void adjustSlotTotal(character.id, slot.level, kind, -1, character.spellSlots, setCharacter)}
                   className="w-6 h-6 flex items-center justify-center text-stone-600 hover:text-stone-300 text-base leading-none shrink-0"
                 >−</button>
                 <button
-                  onClick={() => void adjustSlotTotal(character.id, slot.level, +1, character.spellSlots, setCharacter)}
+                  onClick={() => void adjustSlotTotal(character.id, slot.level, kind, +1, character.spellSlots, setCharacter)}
                   className="w-6 h-6 flex items-center justify-center text-stone-600 hover:text-stone-300 text-base leading-none shrink-0"
                 >+</button>
                 <button
-                  onClick={() => void removeSlotLevel(character.id, slot.level, character.spellSlots, setCharacter)}
+                  onClick={() => void removeSlotLevel(character.id, slot.level, kind, character.spellSlots, setCharacter)}
                   className="w-6 h-6 flex items-center justify-center text-stone-700 hover:text-red-400 text-xs transition-colors shrink-0"
                 >✕</button>
               </div>
-            ))}
-          </div>
-          <AddSlotLevelRow
-            characterId={character.id}
-            spellSlots={character.spellSlots}
-            setCharacter={setCharacter}
-          />
-        </div>
+            )
+          }
+
+          return (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-stone-500 uppercase tracking-widest">Spell Slots</p>
+              {character.spellSlots.length === 0 && (
+                <p className="text-stone-600 text-xs">No spell slots yet — add a level below.</p>
+              )}
+              <div className="space-y-2">{sharedSlots.map(renderRow)}</div>
+
+              {pactSlots.length > 0 && (
+                <div className="pt-2 border-t border-stone-800 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-amber-400 uppercase tracking-widest">Pact Magic</p>
+                    <span className="text-[0.65rem] text-stone-600">recharges on a short rest</span>
+                  </div>
+                  {pactSlots.map(renderRow)}
+                </div>
+              )}
+
+              <AddSlotLevelRow
+                characterId={character.id}
+                spellSlots={character.spellSlots}
+                setCharacter={setCharacter}
+              />
+            </div>
+          )
+        })()}
 
         {(whispers.length > 0 || fateLog.length > 0) && (() => {
           type LogEntry =
@@ -903,15 +954,23 @@ async function updateDeathSave(
   setCharacter(prev => prev ? { ...prev, deathSaves } : prev)
 }
 
+// Pact Magic slots share the array with Spellcasting slots but are a separate
+// pool, so every one of these helpers matches on level AND kind — matching on
+// level alone would let a warlock/wizard's 2nd-level pact slots and 2nd-level
+// shared slots toggle each other.
+type SlotKind = 'spell' | 'pact'
+const slotKind = (s: { kind?: SlotKind }): SlotKind => s.kind ?? 'spell'
+
 async function toggleSpellSlot(
   characterId: string,
   level: number,
+  kind: SlotKind,
   slotIndex: number,
   currentSlots: Character['spellSlots'],
   setCharacter: React.Dispatch<React.SetStateAction<Character | null>>,
 ) {
   const spellSlots = currentSlots.map(s => {
-    if (s.level !== level) return s
+    if (s.level !== level || slotKind(s) !== kind) return s
     const isUsed = slotIndex < s.used
     return { ...s, used: isUsed ? Math.max(0, s.used - 1) : Math.min(s.total, s.used + 1) }
   })
@@ -926,12 +985,13 @@ async function toggleSpellSlot(
 async function adjustSlotTotal(
   characterId: string,
   level: number,
+  kind: SlotKind,
   delta: number,
   currentSlots: Character['spellSlots'],
   setCharacter: React.Dispatch<React.SetStateAction<Character | null>>,
 ) {
   const spellSlots = currentSlots.map(s => {
-    if (s.level !== level) return s
+    if (s.level !== level || slotKind(s) !== kind) return s
     const newTotal = Math.max(1, Math.min(9, s.total + delta))
     return { ...s, total: newTotal, used: Math.min(s.used, newTotal) }
   })
@@ -946,10 +1006,11 @@ async function adjustSlotTotal(
 async function removeSlotLevel(
   characterId: string,
   level: number,
+  kind: SlotKind,
   currentSlots: Character['spellSlots'],
   setCharacter: React.Dispatch<React.SetStateAction<Character | null>>,
 ) {
-  const spellSlots = currentSlots.filter(s => s.level !== level)
+  const spellSlots = currentSlots.filter(s => !(s.level === level && slotKind(s) === kind))
   await fetch('/api/characters/spell-slots', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -970,14 +1031,14 @@ function AddSlotLevelRow({
   const [newLevel, setNewLevel] = React.useState(1)
   const [newTotal, setNewTotal] = React.useState(2)
 
-  const existingLevels = spellSlots.map(s => s.level)
+  const existingLevels = spellSlots.filter(s => slotKind(s) === 'spell').map(s => s.level)
   const available = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => !existingLevels.includes(l))
   if (available.length === 0) return null
 
   const effectiveLevel = available.includes(newLevel) ? newLevel : available[0]!
 
   const handleAdd = async () => {
-    const updated = [...spellSlots, { level: effectiveLevel, total: newTotal, used: 0 }]
+    const updated = [...spellSlots, { level: effectiveLevel, total: newTotal, used: 0, kind: 'spell' as const }]
       .sort((a, b) => a.level - b.level)
     await fetch('/api/characters/spell-slots', {
       method: 'POST',
@@ -1122,6 +1183,9 @@ function PlayerRosterTab({ roster, selfId }: { roster: RosterSummary[]; selfId: 
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate">{c.characterName}</p>
                 <p className="text-xs text-stone-500 truncate">{c.playerName}</p>
+                <p className="text-xs text-stone-600 truncate mt-0.5">
+                  {formatClassLine(resolveClasses(c.classes, c.class, c.level))}
+                </p>
               </div>
               <span className="text-sm font-bold font-mono tabular-nums shrink-0">
                 {c.currentHp}<span className="text-stone-500"> / {c.maxHp}</span>
@@ -1477,43 +1541,4 @@ function MapViewer({ map, viewport }: { map: CampaignMap; viewport: MapViewport 
       />
     </div>
   )
-}
-
-function rowToCharacter(row: Record<string, unknown>): Character {
-  return {
-    id: row.id as string,
-    campaignId: row.campaign_id as string,
-    playerName: row.player_name as string,
-    characterName: row.character_name as string,
-    class: row.class as string,
-    race: (row.race as string) ?? null,
-    background: (row.background as string) ?? null,
-    level: row.level as number,
-    xp: (row.xp as number) ?? 0,
-    maxHp: row.max_hp as number,
-    currentHp: row.current_hp as number,
-    armorClass: row.armor_class as number,
-    speed: (row.speed as number) ?? null,
-    passivePerception: (row.passive_perception as number) ?? null,
-    abilityScores: (row.ability_scores as Character['abilityScores']) ?? null,
-    personalityTraits: (row.personality_traits as string) ?? null,
-    ideals: (row.ideals as string) ?? null,
-    bonds: (row.bonds as string) ?? null,
-    flaws: (row.flaws as string) ?? null,
-    backstory: (row.backstory as string) ?? null,
-    deathSaves: (row.death_saves as Character['deathSaves']) ?? { successes: 0, failures: 0 },
-    spellSlots: (row.spell_slots as Character['spellSlots']) ?? [],
-    conditions: (row.conditions as Character['conditions']) ?? [],
-    loot: (row.loot as Character['loot']) ?? [],
-    gold: (row.gold as number) ?? 0,
-    silver: (row.silver as number) ?? 0,
-    copper: (row.copper as number) ?? 0,
-    customCurrency: (row.custom_currency as CustomCurrencyEntry[]) ?? [],
-    pushSubscription: (row.push_subscription as Character['pushSubscription']) ?? null,
-    isActive: row.is_active as boolean,
-    tokenImageUrl: (row.token_image_url as string) ?? null,
-    tokenStoragePath: (row.token_storage_path as string) ?? null,
-    tokenColor: (row.token_color as string) ?? '#b45309',
-    createdAt: new Date(row.created_at as string),
-  }
 }

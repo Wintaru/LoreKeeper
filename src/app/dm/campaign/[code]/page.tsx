@@ -13,14 +13,13 @@ import { EvaluateEncounterHandler } from '@/engines/encounter/handlers/EvaluateE
 import { SpellsTab } from '@/components/SpellsTab'
 import { RulebookTab } from '@/components/RulebookTab'
 import { BattleMapEditor } from '@/components/battlemap/BattleMapEditor'
+import { MulticlassPanel } from '@/components/MulticlassPanel'
+import { XP_THRESHOLDS, xpToLevel, xpForNextLevel, proficiencyBonusForLevel } from '@/data/leveling'
+import { resolveClasses, formatClassLine } from '@/data/multiclass'
 
 type Tab = 'roster' | 'combat' | 'fate' | 'world' | 'encounter' | 'maps' | 'battleMaps' | 'spells' | 'rulebook'
 type WorldTab = 'npcs' | 'locations' | 'inventory' | 'log' | 'tables' | 'quests'
 
-// D&D 5e XP thresholds — index = level - 1
-const XP_THRESHOLDS = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000]
-function xpToLevel(xp: number) { let l = 1; for (let i = 0; i < 20; i++) { if (xp >= XP_THRESHOLDS[i]) l = i + 1 } return l }
-function xpForNextLevel(level: number) { return level >= 20 ? null : XP_THRESHOLDS[level] }
 
 const BUILT_IN_TABLES: Record<string, { label: string; entries: string[] }> = {
   names: { label: 'Fantasy Names', entries: ['Aelindra','Borin','Caelum','Dorvak','Elenara','Fendrel','Galindra','Halgrim','Ilyana','Jorvek','Kira','Lundak','Mirela','Norgrim','Opalind','Pyra','Quelara','Rodvar','Silvara','Thorin','Ulindra','Varek','Windara','Xandrel','Yelara','Zorvak'] },
@@ -340,8 +339,13 @@ function RosterTab({ characters, code, onRosterRefresh }: { characters: Characte
 function CharacterCard({ character: c, onRefresh }: { character: Character; onRefresh: () => void }) {
   const hpPercent = Math.max(0, (c.currentHp / c.maxHp) * 100)
   const hpColor = hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
-  const level = xpToLevel(c.xp)
-  const nextXp = xpForNextLevel(level)
+  // `c.level` is the authoritative total (the sum of the per-class levels).
+  // `earnedLevel` is what the XP total alone would buy — the two can differ
+  // while the DM has yet to assign an earned level to a class.
+  const classes = resolveClasses(c.classes, c.class, c.level)
+  const level = c.level
+  const earnedLevel = xpToLevel(c.xp)
+  const nextXp = xpForNextLevel(earnedLevel)
   const [xpInput, setXpInput] = useState('')
   const [whisperText, setWhisperText] = useState('')
   const [showWhisper, setShowWhisper] = useState(false)
@@ -423,7 +427,11 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
       <div className="flex items-start justify-between">
         <div>
           <p className="font-semibold">{c.characterName}</p>
-          <p className="text-stone-400 text-sm">{c.playerName} · {c.class} {c.level}</p>
+          <p className="text-stone-400 text-sm">{c.playerName} · {formatClassLine(classes)}</p>
+          <p className="text-stone-600 text-xs mt-0.5">
+            Level {level} · Proficiency +{proficiencyBonusForLevel(level)}
+            {classes.length > 1 && <span className="text-violet-500/80"> · Multiclass</span>}
+          </p>
         </div>
         <div className="flex items-start gap-3">
           <div className="text-right">
@@ -475,13 +483,13 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
       {/* XP */}
       <div className="border-t border-stone-800/50 pt-3 space-y-2">
         <div className="flex items-center justify-between text-xs text-stone-500">
-          <span>{c.xp.toLocaleString()} XP · Level {level}</span>
+          <span>{c.xp.toLocaleString()} XP · earns level {earnedLevel}</span>
           {nextXp && <span>{(nextXp - c.xp).toLocaleString()} to next level</span>}
         </div>
         {nextXp && (
           <div className="h-1 bg-stone-800 rounded-full overflow-hidden">
             <div className="h-full bg-violet-600 rounded-full transition-all"
-              style={{ width: `${Math.min(100, ((c.xp - XP_THRESHOLDS[level - 1]) / (nextXp - XP_THRESHOLDS[level - 1])) * 100)}%` }} />
+              style={{ width: `${Math.min(100, ((c.xp - XP_THRESHOLDS[earnedLevel - 1]) / (nextXp - XP_THRESHOLDS[earnedLevel - 1])) * 100)}%` }} />
           </div>
         )}
         <div className="flex gap-2 items-center">
@@ -597,6 +605,9 @@ function CharacterCard({ character: c, onRefresh }: { character: Character; onRe
           </div>
         )}
       </div>
+
+      {/* Classes & level up */}
+      <MulticlassPanel character={c} dmPin={getDmPin()} onRefresh={onRefresh} />
 
       {/* Fighting style analysis */}
       <div className="border-t border-stone-800/50 pt-3">

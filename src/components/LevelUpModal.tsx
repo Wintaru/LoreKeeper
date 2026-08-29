@@ -1,14 +1,14 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import type { SpellSlot } from '@/types'
+import type { SpellSlot, ClassLevel } from '@/types'
+import { getApiClassIndex, mergeSpellSlots } from '@/data/spellSlots'
 import {
-  getSpellSlotsForLevel,
-  mergeSpellSlots,
-  getNewlyUnlockedSlotLevels,
-  getApiClassIndex,
-  getCasterType,
-} from '@/data/spellSlots'
+  calculateSpellcasting,
+  formatClassLine,
+  totalLevel,
+} from '@/data/multiclass'
+import { proficiencyBonusForLevel } from '@/data/leveling'
 
 type ApiFeature = { index: string; name: string }
 type FeatureDetail = { name: string; desc: string[] }
@@ -27,7 +27,8 @@ const SLOT_LEVEL_COLORS: Record<number, string> = {
 
 export function LevelUpModal({
   characterName,
-  className,
+  classes,
+  previousClasses,
   newLevel,
   currentSpellSlots,
   onClose,
@@ -35,7 +36,10 @@ export function LevelUpModal({
   onBrowseSpells,
 }: {
   characterName: string
-  className: string
+  /** The character's class line-up AFTER the level. */
+  classes: ClassLevel[]
+  /** The line-up BEFORE it, used to work out which class gained the level. */
+  previousClasses: ClassLevel[]
   newLevel: number
   currentSpellSlots: SpellSlot[]
   onClose: () => void
@@ -49,23 +53,39 @@ export function LevelUpModal({
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
 
-  const classIndex = getApiClassIndex(className)
-  const casterType = getCasterType(className)
-  const newSlots = getSpellSlotsForLevel(className, newLevel)
+  // Work out which class took the level so the features panel and the
+  // "Browse spells" link point at the right class, not just the primary one.
+  const levelledClass = findLevelledClass(previousClasses, classes)
+  const classLevel = classes.find(c => c.name === levelledClass)?.level ?? newLevel
+
+  const casting = calculateSpellcasting(classes)
+  const previousCasting = calculateSpellcasting(previousClasses)
+
+  const classIndex = getApiClassIndex(levelledClass)
+  const newSlots = [...casting.spellSlots, ...casting.pactSlots]
   const mergedSlots = mergeSpellSlots(currentSpellSlots, newSlots)
-  const newlyUnlocked = getNewlyUnlockedSlotLevels(className, newLevel - 1, newLevel)
-  const isCaster = casterType !== 'none'
+
+  const previousLevels = new Set(
+    [...previousCasting.spellSlots, ...previousCasting.pactSlots]
+      .map(s => `${s.kind ?? 'spell'}-${s.level}`)
+  )
+  const newlyUnlocked = newSlots
+    .filter(s => !previousLevels.has(`${s.kind ?? 'spell'}-${s.level}`))
+    .map(s => s.level)
+
+  const isCaster = newSlots.length > 0
+  const isMulticlass = classes.length > 1
 
   useEffect(() => {
     if (!classIndex) { setLoadingFeatures(false); return }
-    fetch(`https://www.dnd5eapi.co/api/classes/${classIndex}/levels/${newLevel}`)
+    fetch(`https://www.dnd5eapi.co/api/classes/${classIndex}/levels/${classLevel}`)
       .then(r => r.json())
       .then((data: unknown) => {
         if (isLevelData(data)) setFeatures(data.features)
       })
       .catch(() => {})
       .finally(() => setLoadingFeatures(false))
-  }, [classIndex, newLevel])
+  }, [classIndex, classLevel])
 
   const fetchFeatureDetail = async (index: string) => {
     if (featureDetails[index]) return
@@ -98,7 +118,15 @@ export function LevelUpModal({
           <div className="text-center space-y-2">
             <p className="text-violet-400 text-xs uppercase tracking-[0.3em] font-medium">Level Up!</p>
             <p className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-violet-300 to-violet-600 leading-none py-1">{newLevel}</p>
-            <p className="text-stone-300 text-sm">{characterName} · {className}</p>
+            <p className="text-stone-300 text-sm">{characterName} · {formatClassLine(classes)}</p>
+            <p className="text-stone-500 text-xs">
+              Level in {levelledClass}: {classLevel} · Proficiency +{proficiencyBonusForLevel(totalLevel(classes))}
+            </p>
+            {isMulticlass && casting.multiclassCasterLevel !== null && (
+              <p className="text-violet-400/80 text-xs">
+                Combined caster level {casting.multiclassCasterLevel}
+              </p>
+            )}
           </div>
 
           {/* Class Features */}
@@ -142,8 +170,8 @@ export function LevelUpModal({
             <div className="bg-stone-900 border border-violet-900/50 rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-stone-500 uppercase tracking-widest">Spell Slots</p>
-                {casterType === 'warlock' && (
-                  <span className="text-xs text-amber-400 bg-amber-950/40 border border-amber-900/40 px-2 py-0.5 rounded-full">Pact Magic</span>
+                {casting.pactSlots.length > 0 && (
+                  <span className="text-xs text-amber-400 bg-amber-950/40 border border-amber-900/40 px-2 py-0.5 rounded-full">+ Pact Magic</span>
                 )}
               </div>
 
@@ -159,15 +187,23 @@ export function LevelUpModal({
 
               <div className="space-y-2">
                 {mergedSlots.map(slot => {
-                  const isNew = newlyUnlocked.includes(slot.level)
-                  const oldSlot = currentSpellSlots.find(s => s.level === slot.level)
+                  const kind = slot.kind ?? 'spell'
+                  const isPact = kind === 'pact'
+                  const isNew = !previousLevels.has(`${kind}-${slot.level}`)
+                  const oldSlot = currentSpellSlots.find(s => s.level === slot.level && (s.kind ?? 'spell') === kind)
                   const increased = oldSlot && slot.total > oldSlot.total
                   return (
-                    <div key={slot.level} className={`flex items-center gap-3 rounded-lg px-2 py-1 ${isNew ? 'bg-violet-950/30' : ''}`}>
-                      <span className="text-stone-500 text-xs w-10 shrink-0">Lvl {slot.level}</span>
+                    <div key={`${kind}-${slot.level}`} className={`flex items-center gap-3 rounded-lg px-2 py-1 ${isNew ? 'bg-violet-950/30' : ''}`}>
+                      <span className={`text-xs w-10 shrink-0 ${isPact ? 'text-amber-500' : 'text-stone-500'}`}>Lvl {slot.level}</span>
                       <div className="flex gap-1 flex-wrap flex-1">
                         {Array.from({ length: slot.total }).map((_, i) => (
-                          <div key={i} className={`w-5 h-5 rounded-full border-2 ${isNew || (increased && i >= (oldSlot?.total ?? 0)) ? 'border-violet-400 bg-violet-800/60' : 'border-violet-600 bg-violet-900/40'}`} />
+                          <div key={i} className={`w-5 h-5 rounded-full border-2 ${
+                            isPact
+                              ? 'border-amber-500 bg-amber-900/50'
+                              : isNew || (increased && i >= (oldSlot?.total ?? 0))
+                                ? 'border-violet-400 bg-violet-800/60'
+                                : 'border-violet-600 bg-violet-900/40'
+                          }`} />
                         ))}
                       </div>
                       <span className="text-xs tabular-nums shrink-0">
@@ -203,7 +239,7 @@ export function LevelUpModal({
               onClick={() => { onBrowseSpells(); onClose() }}
               className="w-full py-3 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded-xl text-sm text-stone-300 transition-colors flex items-center justify-center gap-2"
             >
-              <span>Browse {className} Spells</span>
+              <span>Browse {levelledClass} Spells</span>
               <span className="text-stone-500">→</span>
             </button>
           )}
@@ -224,6 +260,15 @@ export function LevelUpModal({
       </div>
     </div>
   )
+}
+
+/** The class whose level changed between the two line-ups. */
+function findLevelledClass(before: ClassLevel[], after: ClassLevel[]): string {
+  for (const entry of after) {
+    const prior = before.find(b => b.name.toLowerCase().trim() === entry.name.toLowerCase().trim())
+    if (!prior || prior.level < entry.level) return entry.name
+  }
+  return after[after.length - 1]?.name ?? ''
 }
 
 function isLevelData(v: unknown): v is { features: ApiFeature[] } {

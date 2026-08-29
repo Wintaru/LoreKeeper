@@ -22,6 +22,7 @@ import { KickCharacterHandler } from '@/accessors/character/handlers/KickCharact
 import { UpdateCharacterCurrencyHandler as AccessorUpdateCharacterCurrencyHandler } from '@/accessors/character/handlers/UpdateCharacterCurrencyHandler'
 import { UpdateCharacterStatsHandler as AccessorUpdateCharacterStatsHandler } from '@/accessors/character/handlers/UpdateCharacterStatsHandler'
 import { UpdateCharacterTokenHandler as AccessorUpdateCharacterTokenHandler } from '@/accessors/character/handlers/UpdateCharacterTokenHandler'
+import { UpdateCharacterClassesHandler } from '@/accessors/character/handlers/UpdateCharacterClassesHandler'
 import {
   StoreCharacterRequest,
   LoadRosterRequest,
@@ -36,6 +37,7 @@ import {
   UpdateCharacterCurrencyRequest as AccessorUpdateCharacterCurrencyRequest,
   UpdateCharacterStatsRequest as AccessorUpdateCharacterStatsRequest,
   UpdateCharacterTokenRequest as AccessorUpdateCharacterTokenRequest,
+  UpdateCharacterClassesRequest,
 } from '@/accessors/character/CharacterRequests'
 
 // Accessors — Combat
@@ -82,6 +84,11 @@ import { XpEngine } from '@/engines/xp/XpEngine'
 import { CalculateLevelHandler } from '@/engines/xp/handlers/CalculateLevelHandler'
 import { CalculateLevelRequest } from '@/engines/xp/XpEngineRequests'
 
+// Engines — Spellcasting
+import { SpellcastingEngine } from '@/engines/spellcasting/SpellcastingEngine'
+import { CalculateSpellSlotsHandler } from '@/engines/spellcasting/handlers/CalculateSpellSlotsHandler'
+import { CalculateSpellSlotsRequest } from '@/engines/spellcasting/SpellcastingEngineRequests'
+
 // Managers — Campaign
 import { CampaignManager } from '@/managers/campaign/CampaignManager'
 import { CreateCampaignHandler } from '@/managers/campaign/handlers/CreateCampaignHandler'
@@ -103,6 +110,8 @@ import { KickPlayerHandler } from '@/managers/character/handlers/KickPlayerHandl
 import { UpdateCharacterCurrencyHandler } from '@/managers/character/handlers/UpdateCharacterCurrencyHandler'
 import { UpdateCharacterStatsHandler } from '@/managers/character/handlers/UpdateCharacterStatsHandler'
 import { UpdateCharacterTokenHandler } from '@/managers/character/handlers/UpdateCharacterTokenHandler'
+import { LevelUpClassHandler } from '@/managers/character/handlers/LevelUpClassHandler'
+import { SetCharacterClassesHandler } from '@/managers/character/handlers/SetCharacterClassesHandler'
 import {
   UpdateHpRequest,
   UpdateConditionsRequest,
@@ -114,6 +123,8 @@ import {
   UpdateCharacterCurrencyRequest,
   UpdateCharacterStatsRequest,
   UpdateCharacterTokenRequest,
+  LevelUpClassRequest,
+  SetCharacterClassesRequest,
 } from '@/managers/character/CharacterRequests'
 
 // Managers — Combat
@@ -394,6 +405,7 @@ export function createContainer(): Container {
       .register(AccessorUpdateCharacterCurrencyRequest, new AccessorUpdateCharacterCurrencyHandler(db))
       .register(AccessorUpdateCharacterStatsRequest, new AccessorUpdateCharacterStatsHandler(db))
       .register(AccessorUpdateCharacterTokenRequest, new AccessorUpdateCharacterTokenHandler(db))
+      .register(UpdateCharacterClassesRequest, new UpdateCharacterClassesHandler(db))
       .build(),
     new HandlerResolverBuilder()
       .register(LoadRosterRequest, new LoadRosterHandler(db))
@@ -454,6 +466,12 @@ export function createContainer(): Container {
       .build(),
   )
 
+  const spellcastingEngine = new SpellcastingEngine(
+    new HandlerResolverBuilder()
+      .register(CalculateSpellSlotsRequest, new CalculateSpellSlotsHandler())
+      .build(),
+  )
+
   // ── Managers ───────────────────────────────────────────────────────────────
 
   const campaignManager = new CampaignManager(
@@ -474,12 +492,14 @@ export function createContainer(): Container {
       .register(UpdateConditionsRequest, new ManagerUpdateConditionsHandler(characterAccessor))
       .register(UpdateDeathSavesRequest, new ManagerUpdateDeathSavesHandler(characterAccessor))
       .register(UpdateSpellSlotsRequest, new ManagerUpdateSpellSlotsHandler(characterAccessor))
-      .register(AwardXpRequest, new AwardXpHandler(characterAccessor, xpEngine, notificationAccessor))
+      .register(AwardXpRequest, new AwardXpHandler(characterAccessor, xpEngine, notificationAccessor, spellcastingEngine))
       .register(WhisperRequest, new WhisperHandler(characterAccessor, notificationAccessor))
       .register(KickPlayerRequest, new KickPlayerHandler(characterAccessor))
       .register(UpdateCharacterCurrencyRequest, new UpdateCharacterCurrencyHandler(characterAccessor))
       .register(UpdateCharacterStatsRequest, new UpdateCharacterStatsHandler(characterAccessor))
       .register(UpdateCharacterTokenRequest, new UpdateCharacterTokenHandler(characterAccessor))
+      .register(LevelUpClassRequest, new LevelUpClassHandler(characterAccessor, spellcastingEngine, notificationAccessor))
+      .register(SetCharacterClassesRequest, new SetCharacterClassesHandler(characterAccessor, spellcastingEngine))
       .build(),
   )
 

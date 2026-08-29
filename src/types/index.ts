@@ -2,6 +2,19 @@ export interface SpellSlot {
   level: number
   total: number
   used: number
+  // Warlock Pact Magic slots live in the same array but are a separate pool:
+  // they are not part of the shared multiclass slot table and they recharge on
+  // a short rest. Absent (undefined) means an ordinary Spellcasting slot, which
+  // keeps every row written before multiclassing existed valid as-is.
+  kind?: 'spell' | 'pact'
+}
+
+// One class a character has levels in. `subclass` is optional and only matters
+// mechanically for Eldritch Knight / Arcane Trickster, which are third casters.
+export interface ClassLevel {
+  name: string
+  level: number
+  subclass: string | null
 }
 
 export interface Condition {
@@ -189,7 +202,27 @@ export interface Character {
   campaignId: string
   playerName: string
   characterName: string
+  // DESIGN FORK — `class` and `level` are KEPT as derived convenience fields
+  // rather than being replaced by `classes`.
+  //
+  //   class  = the primary class (the first entry of `classes`, i.e. the class
+  //            the character started in)
+  //   level  = TOTAL character level (the sum of every entry's level)
+  //   classes = the authoritative per-class breakdown
+  //
+  // Keeping them was chosen over a clean replacement because:
+  //   1. `RosterSummary` is a deliberately narrow SELECT of `class, level` that
+  //      backs player-facing surfaces; widening it to parse JSON would give the
+  //      un-trusted roster projection more than it needs.
+  //   2. The campaign packet export/import format, the XP engine, the fighting
+  //      style analyser and the battle-map token code all read these as scalars.
+  //   3. Total level stays a real int column, so it remains sortable/filterable
+  //      in Postgres.
+  // The cost is that they must be recomputed together with `classes` on every
+  // write — which is exactly why all class writes funnel through a single
+  // Manager operation instead of being set field-by-field.
   class: string
+  classes: ClassLevel[]
   race: string | null
   background: string | null
   level: number
@@ -229,6 +262,9 @@ export interface RosterSummary {
   characterName: string
   playerName: string
   class: string
+  // Per-class breakdown so the roster can show "Fighter 5 / Wizard 3". No more
+  // sensitive than the `class` and `level` already in this projection.
+  classes: ClassLevel[]
   level: number
   currentHp: number
   maxHp: number
