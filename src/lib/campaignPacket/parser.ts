@@ -51,7 +51,7 @@ function blankLocation(name: string): PacketLocation {
   return { name, visited: false, notes: null, image: null }
 }
 function blankQuest(title: string): PacketQuest {
-  return { title, giver: null, objective: null, location: null, complications: null, reward: null, difficulty: 1, questType: null, isOptional: true, isPublic: false }
+  return { title, description: null, giver: null, objective: null, location: null, complications: null, reward: null, difficulty: 1, questType: null, isOptional: true, isPublic: false }
 }
 function blankCharacter(name: string): PacketCharacter {
   return {
@@ -107,6 +107,9 @@ export function parseCampaignPacket(text: string): CampaignPacket {
     } else if (section === 'quests') {
       const f = currentFields
       const q = currentEntity as PacketQuest
+      // The DM's quest editor labels this field "Description / Notes", so
+      // accept either word as the key on import.
+      q.description = f['description'] ?? f['notes'] ?? null
       q.giver = f['giver'] ?? null
       q.objective = f['objective'] ?? null
       q.location = f['location'] ?? null

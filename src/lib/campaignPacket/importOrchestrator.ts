@@ -92,11 +92,11 @@ export async function importCampaignPacket(packet: CampaignPacket, images: Map<s
   let questCount = 0
   for (const q of packet.quests) {
     const result = (await worldManager.execute(
-      new AddQuestRequest(campaign.id, q.title, null, q.giver, q.objective, q.location, q.complications, q.reward, q.difficulty, q.questType, q.isOptional)
+      new AddQuestRequest(campaign.id, q.title, q.description, q.giver, q.objective, q.location, q.complications, q.reward, q.difficulty, q.questType, q.isOptional)
     )) as QuestResponse
     if (result.success && result.quest && q.isPublic) {
       await worldManager.execute(new EditQuestRequest(
-        result.quest.id, q.title, null, q.giver, q.objective, q.location, q.complications, q.reward,
+        result.quest.id, q.title, q.description, q.giver, q.objective, q.location, q.complications, q.reward,
         q.difficulty, q.questType, q.isOptional, true, result.quest.status,
       ))
     }

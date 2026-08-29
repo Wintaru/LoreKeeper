@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createContainer } from '@/container/DependencyContainer'
-import { verifyDmPinForCampaign } from '@/lib/auth/dmAuth'
+import { verifyDmPinForCampaign, verifyDmPinForBattleMap } from '@/lib/auth/dmAuth'
 import { GetTokensRequest, AddTokenRequest } from '@/managers/battlemap/BattleMapRequests'
 import type { TokensResponse, TokenResponse } from '@/managers/battlemap/BattleMapResponses'
 import type { TokenKind } from '@/types'
@@ -9,7 +9,17 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const battleMapId = searchParams.get('battleMapId')
   const forPlayers = searchParams.get('forPlayers') === 'true'
+  const dmPin = searchParams.get('dmPin') ?? undefined
   if (!battleMapId) return NextResponse.json({ error: 'battleMapId is required' }, { status: 400 })
+
+  // The unfiltered list includes tokens the DM has deliberately hidden from
+  // players (visible_to_players = false) — ambushes, unrevealed enemies. Only
+  // opting in to the player-safe view may skip the PIN; anyone asking for the
+  // full list is claiming to be the DM and has to prove it, exactly as the
+  // scale and library GETs already do.
+  if (!forPlayers && !(await verifyDmPinForBattleMap(battleMapId, dmPin))) {
+    return NextResponse.json({ error: 'Invalid DM PIN' }, { status: 401 })
+  }
 
   const { battleMapManager } = createContainer()
   const result = (await battleMapManager.query(new GetTokensRequest(battleMapId))) as TokensResponse

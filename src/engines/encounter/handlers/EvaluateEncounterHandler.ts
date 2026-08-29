@@ -61,17 +61,17 @@ function avgAttackBonus(avgLevel: number): number {
   return 11
 }
 
-// D&D 5e level from XP (matches existing xpToLevel in page.tsx)
-const XP_LEVEL_THRESHOLDS = [
-  0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
-  85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000,
-]
-function xpToLevel(xp: number): number {
-  let level = 1
-  for (let i = 0; i < 20; i++) {
-    if (xp >= XP_LEVEL_THRESHOLDS[i]) level = i + 1
-  }
-  return level
+// A character's effective level for encounter maths.
+//
+// This used to re-derive the level from `character.xp`. That is wrong: `level`
+// is the stored total character level (the sum of the per-class levels) and is
+// the only value the rest of the app trusts. XP no longer sets it — a DM
+// running milestone levelling never awards XP at all, and a multiclassed
+// character's level is only applied when the DM picks the class. Deriving from
+// XP therefore rated a milestone-levelled level-8 party as level 1 and called
+// every encounter Deadly.
+function effectiveLevel(character: Character): number {
+  return Math.max(1, Math.min(20, character.level))
 }
 
 // Piecewise interpolation mapping monsterXP → score 1–10
@@ -112,8 +112,7 @@ export class EvaluateEncounterHandler implements IHandler {
     const partyForCalc = activeParty.length > 0 ? activeParty : party
     const partyThresholds = partyForCalc.reduce(
       (acc, c) => {
-        const lv = Math.max(1, Math.min(20, xpToLevel(c.xp)))
-        const t = XP_THRESHOLDS[lv]
+        const t = XP_THRESHOLDS[effectiveLevel(c)]
         return { easy: acc.easy + t.easy, medium: acc.medium + t.medium, hard: acc.hard + t.hard, deadly: acc.deadly + t.deadly }
       },
       { easy: 0, medium: 0, hard: 0, deadly: 0 },
@@ -129,7 +128,7 @@ export class EvaluateEncounterHandler implements IHandler {
 
     // AC penalty — use the highest-AC monster
     const maxAC = Math.max(...monsterGroups.map(g => g.monster.ac))
-    const avgLevel = partyForCalc.reduce((s, c) => s + xpToLevel(c.xp), 0) / partyForCalc.length
+    const avgLevel = partyForCalc.reduce((s, c) => s + effectiveLevel(c), 0) / partyForCalc.length
     const hitChance = Math.max(0.05, Math.min(0.95, (21 - maxAC + avgAttackBonus(avgLevel)) / 20))
     const acPenalty = hitChance < 0.35 ? 1.5 : hitChance < 0.5 ? 1.0 : hitChance < 0.65 ? 0.5 : 0
 

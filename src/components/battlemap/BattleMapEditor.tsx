@@ -101,7 +101,7 @@ export function BattleMapEditor({
 
   const loadAll = useCallback(async () => {
     const [tRes, fRes, sRes, aRes, lRes] = await Promise.all([
-      fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}`).then(r => r.json()),
+      fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`).then(r => r.json()),
       fetch(`/api/battlemap/fog?battleMapId=${battleMap.id}`).then(r => r.json()),
       fetch(`/api/battlemap/scale?battleMapId=${battleMap.id}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`).then(r => r.json()),
       fetch(`/api/battlemap/annotations?battleMapId=${battleMap.id}`).then(r => r.json()),
@@ -122,7 +122,7 @@ export function BattleMapEditor({
     const channel = supabase
       .channel(`battlemap-editor:${battleMap.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_tokens', filter: `battle_map_id=eq.${battleMap.id}` },
-        () => { void fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}`).then(r => r.json()).then(d => { if (Array.isArray(d.tokens)) setTokens(d.tokens) }) })
+        () => { void fetch(`/api/battlemap/tokens?battleMapId=${battleMap.id}&dmPin=${encodeURIComponent(getDmPin() ?? '')}`).then(r => r.json()).then(d => { if (Array.isArray(d.tokens)) setTokens(d.tokens) }) })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_map_annotations', filter: `battle_map_id=eq.${battleMap.id}` },
         () => { void fetch(`/api/battlemap/annotations?battleMapId=${battleMap.id}`).then(r => r.json()).then(d => { if (Array.isArray(d.annotations)) setAnnotations(d.annotations) }) })
       .on('broadcast', { event: 'ping' }, payload => {

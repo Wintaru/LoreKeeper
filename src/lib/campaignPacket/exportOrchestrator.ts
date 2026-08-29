@@ -65,7 +65,7 @@ export async function exportCampaignToZip(campaignId: string, campaignCode: stri
 
   for (const q of questsRes.quests) {
     packet.quests.push({
-      title: q.title, giver: q.giver, objective: q.objective, location: q.location, complications: q.complications,
+      title: q.title, description: q.description, giver: q.giver, objective: q.objective, location: q.location, complications: q.complications,
       reward: q.reward, difficulty: q.difficulty, questType: q.questType, isOptional: q.isOptional, isPublic: q.isPublic,
     })
   }

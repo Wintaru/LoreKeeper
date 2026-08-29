@@ -19,6 +19,7 @@ export interface PacketLocation {
 
 export interface PacketQuest {
   title: string
+  description: string | null
   giver: string | null
   objective: string | null
   location: string | null

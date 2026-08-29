@@ -11,26 +11,20 @@ export class UpdateInitiativeRollsHandler implements IHandler {
   async handle(request: RequestBase): Promise<ResponseBase> {
     const req = request as UpdateInitiativeRollsRequest
 
-    const { data } = await this.db
-      .from('initiative_requests')
-      .select('rolls')
-      .eq('campaign_id', req.campaignId)
-      .eq('status', 'pending')
-      .single()
-
-    if (!data) {
-      return new UpdateInitiativeRollsResponse(req.correlationId, 'No pending initiative request')
-    }
-
-    const updatedRolls = { ...(data.rolls as Record<string, number>), [req.characterId]: req.roll }
-
-    const { error } = await this.db
-      .from('initiative_requests')
-      .update({ rolls: updatedRolls })
-      .eq('campaign_id', req.campaignId)
-      .eq('status', 'pending')
+    // One atomic jsonb merge in the database rather than read-modify-write in
+    // JS: the whole party taps "Roll" at the same moment, and a read-then-write
+    // round trip loses every roll but the last one to land.
+    const { data, error } = await this.db.rpc('append_initiative_roll', {
+      p_campaign_id: req.campaignId,
+      p_character_id: req.characterId,
+      p_roll: req.roll,
+    })
 
     if (error) return new UpdateInitiativeRollsResponse(req.correlationId, error.message)
+
+    if (data !== true) {
+      return new UpdateInitiativeRollsResponse(req.correlationId, 'No pending initiative request')
+    }
 
     return new UpdateInitiativeRollsResponse(req.correlationId)
   }

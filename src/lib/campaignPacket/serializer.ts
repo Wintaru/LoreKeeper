@@ -44,6 +44,7 @@ export function packetToMarkdown(packet: CampaignPacket): string {
     for (const q of packet.quests) {
       parts.push(`\n### ${q.title}`)
       parts.push(joinFields([
+        field('Description', q.description),
         field('Giver', q.giver),
         field('Objective', q.objective),
         field('Location', q.location),
