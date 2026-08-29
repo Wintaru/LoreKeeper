@@ -302,9 +302,11 @@ export function calculateSpellcasting(classes: ClassLevel[]): SpellcastingBreakd
     const only = spellcastingClasses[0]
     const type = getCasterTypeForEntry(only)
     // Third casters have no table of their own in `spellSlots.ts`; their
-    // progression is the full-caster table read at ceil(level / 3).
+    // progression is the full-caster table read at floor(level / 3) — the
+    // same rounding casterLevelContribution uses below, so a solo third
+    // caster and one counted toward the multiclass table agree.
     const slots = type === 'third'
-      ? multiclassTable(Math.ceil(only.level / 3))
+      ? multiclassTable(Math.floor(only.level / 3))
       : getSpellSlotsForLevel(only.name, only.level)
     return {
       spellSlots: slots, pactSlots, multiclassCasterLevel: null,
