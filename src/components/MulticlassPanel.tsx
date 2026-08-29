@@ -46,6 +46,8 @@ export function MulticlassPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [undoSnapshot, setUndoSnapshot] = useState<ClassSnapshot | null>(null)
+  const [editingClass, setEditingClass] = useState<string | null>(null)
+  const [editLevelInput, setEditLevelInput] = useState('')
 
   // A level is "available" when XP has bought more total levels than the class
   // line-up currently accounts for. XP no longer moves the level number on its
@@ -129,6 +131,37 @@ export function MulticlassPanel({
     onRefresh()
   }
 
+  // Direct level edit — the only way to LOWER a class's level. "Level up"
+  // and XP can only ever raise it; a DM correcting a mistake or narratively
+  // resetting a character (e.g. a stripped-power reveal) needs to set an
+  // exact number, up or down, without clicking "Level up" one at a time.
+  async function handleSetClassLevel(className: string, newLevel: number) {
+    if (busy) return
+    const clamped = Math.max(0, Math.min(MAX_CHARACTER_LEVEL, newLevel))
+    const key = className.toLowerCase().trim()
+    const updated = classes
+      .map(e => (e.name.toLowerCase().trim() === key ? { ...e, level: clamped } : e))
+      .filter(e => e.level > 0)
+    if (updated.length === 0) {
+      setError('A character must have at least one class with at least 1 level')
+      return
+    }
+    setBusy(true); setError(null)
+    const res = await fetch('/api/characters/classes', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: c.id, classes: updated, maxHp: c.maxHp, currentHp: c.currentHp, dmPin }),
+    })
+    setBusy(false)
+    if (!res.ok) {
+      const body: unknown = await res.json().catch(() => null)
+      setError(readError(body) ?? 'Failed to update level')
+      return
+    }
+    setEditingClass(null)
+    onRefresh()
+  }
+
   // Case-insensitive merge: a class already on the sheet must not appear a
   // second time just because it was stored with different casing than its
   // ALL_CLASSES entry (e.g. a character created with "fighter").
@@ -178,10 +211,40 @@ export function MulticlassPanel({
       {open && (
         <div className="space-y-3 pt-1">
           {/* Current line-up */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-lg p-3 space-y-1.5">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-medium text-stone-200">{formatClassLine(classes)}</span>
-              <span className="text-xs text-stone-500 shrink-0">Level {currentTotal}</span>
+          <div className="bg-stone-950/60 border border-stone-800 rounded-lg p-3 space-y-2">
+            <div className="space-y-1">
+              {classes.map(entry => (
+                <div key={entry.name} className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-stone-200">
+                    {entry.name}{entry.subclass ? ` (${entry.subclass})` : ''}
+                  </span>
+                  {editingClass === entry.name ? (
+                    <input
+                      type="number" min={0} max={MAX_CHARACTER_LEVEL} autoFocus
+                      value={editLevelInput}
+                      onChange={e => setEditLevelInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') void handleSetClassLevel(entry.name, parseInt(editLevelInput, 10) || 0)
+                        if (e.key === 'Escape') setEditingClass(null)
+                      }}
+                      onBlur={() => void handleSetClassLevel(entry.name, parseInt(editLevelInput, 10) || 0)}
+                      className="w-14 bg-stone-800 border border-violet-500 rounded px-1.5 py-0.5 text-sm font-mono text-center focus:outline-none"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => { setEditingClass(entry.name); setEditLevelInput(String(entry.level)) }}
+                      title="Click to set an exact level (the only way to lower a class's level)"
+                      className="text-xs text-stone-400 hover:text-violet-400 font-mono px-2 py-0.5 rounded bg-stone-800 border border-stone-700 hover:border-violet-600 transition-colors"
+                    >
+                      Lv {entry.level}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-baseline justify-between gap-2 pt-1 border-t border-stone-800">
+              <span className="text-xs text-stone-500">{formatClassLine(classes)}</span>
+              <span className="text-xs text-stone-500 shrink-0">Total Level {currentTotal}</span>
             </div>
             <div className="flex flex-wrap gap-1.5 text-[0.65rem]">
               <span className="px-2 py-0.5 rounded-full bg-stone-800 border border-stone-700 text-stone-400">
