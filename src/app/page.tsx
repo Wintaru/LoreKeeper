@@ -32,6 +32,12 @@ export default function HomePage() {
             I&apos;m a Player
           </Link>
         </div>
+
+        <div className="text-stone-600 text-xs space-y-0.5 pt-2">
+          <p>Made by Michael Donner</p>
+          <p>Suggestions made by Joseph and Michael&apos;s party</p>
+          <p>Thanks to Josh Donner for helping</p>
+        </div>
       </div>
     </main>
   )
