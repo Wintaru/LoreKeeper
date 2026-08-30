@@ -33,7 +33,7 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className="text-white text-base space-y-0.5 pt-2">
+        <div className="text-white text-xl space-y-1 pt-2">
           <p>Made by Michael Donner</p>
           <p>Suggestions made by Joseph Jenks and Michael&apos;s party</p>
           <p>Thanks to Josh Donner for helping</p>
